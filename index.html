@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr-CH">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="At Home : la garde alternée sereine entre deux foyers. Planning, demandes de modification, jours fériés et vacances scolaires vaudoises." />
+    <meta name="theme-color" content="#2563eb" />
+    <!-- Application installable (requis pour les notifications push sur iPhone / iPad) -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="At Home" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>At Home · Garde alternée</title>
+    <script>
+      // Applique le thème avant le rendu pour éviter un flash clair/sombre.
+      try {
+        var t = localStorage.getItem('athome.theme')
+        var dark = t === 'dark' || ((!t || t === 'system') && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        if (dark) document.documentElement.classList.add('dark')
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <noscript>At Home nécessite JavaScript.</noscript>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

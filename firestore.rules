@@ -1,0 +1,284 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// At Home — Règles de sécurité Firestore
+//
+// Principes :
+// - Isolation stricte par Atome : seuls les membres (atomes/{id}.members) lisent ses données.
+// - L'ajout d'un membre est réservé aux Cloud Functions (Admin SDK, invitation acceptée).
+// - Électron / Positron = parents ; Proton = enfant (lecture + notes) ; Neutron = lecture seule.
+// - Aucune modification de garde directe : un jour existant ne change que par une demande
+//   (changeRequest) approuvée par l'autre parent dans le même lot (vérifié via getAfter).
+// - Règle de majorité : à 18 ans, la fiche d'un enfant n'est plus modifiable par les parents.
+// - Jetons d'appareil Cloud Messaging (users/{uid}/fcmTokens) : accessibles uniquement à leur propriétaire.
+// - Aucune extension Firebase : e-mails envoyés par Firebase Auth, notifications via Cloud Messaging.
+// ─────────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helpers ───────────────────────────────────────────────────────────
+    function signedIn() {
+      return request.auth != null;
+    }
+    function atomePath(atomeId) {
+      return /databases/$(database)/documents/atomes/$(atomeId);
+    }
+    function roleIn(atomeId) {
+      return get(atomePath(atomeId)).data.members[request.auth.uid];
+    }
+    function isMember(atomeId) {
+      return signedIn() && request.auth.uid in get(atomePath(atomeId)).data.members;
+    }
+    function isParent(atomeId) {
+      return isMember(atomeId) && roleIn(atomeId) in ['electron', 'positron'];
+    }
+    function isHousehold(v) {
+      return v in ['electron', 'positron'];
+    }
+    function isIsoDate(v) {
+      return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+    function changedOnly(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+    function unchanged(key) {
+      return request.resource.data[key] == resource.data[key];
+    }
+
+    // ─── Profils utilisateurs ──────────────────────────────────────────────
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.atomeIds == []
+        && request.resource.data.firstName is string && request.resource.data.firstName.size() <= 80
+        && request.resource.data.lastName is string && request.resource.data.lastName.size() <= 80;
+      allow update: if signedIn() && request.auth.uid == uid
+        && unchanged('uid')
+        && changedOnly(['firstName', 'lastName', 'phone', 'pushOptIn', 'email', 'atomeIds', 'updatedAt'])
+        && request.resource.data.firstName.size() <= 80
+        && request.resource.data.lastName.size() <= 80;
+      allow delete: if false;
+
+      // Jetons Cloud Messaging des appareils de l'utilisateur (un document par appareil).
+      match /fcmTokens/{token} {
+        allow read, delete: if signedIn() && request.auth.uid == uid;
+        allow create, update: if signedIn() && request.auth.uid == uid
+          && request.resource.data.token == token
+          && token.size() < 4096;
+      }
+    }
+
+    // ─── Réservation des slugs (unicité) ───────────────────────────────────
+    match /slugs/{slug} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && slug.matches('^[a-z0-9][a-z0-9-]{0,47}$')
+        && request.resource.data.createdBy == request.auth.uid
+        && getAfter(atomePath(request.resource.data.atomeId)).data.slug == slug
+        && getAfter(atomePath(request.resource.data.atomeId)).data.createdBy == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ─── Atomes ────────────────────────────────────────────────────────────
+    match /atomes/{atomeId} {
+      function d() { return request.resource.data; }
+
+      allow read: if signedIn() && request.auth.uid in resource.data.memberUids;
+
+      // Création : le créateur devient l'unique membre (Électron) et réserve le slug dans le même lot.
+      allow create: if signedIn()
+        && d().createdBy == request.auth.uid
+        && d().members.keys().hasOnly([request.auth.uid])
+        && d().members[request.auth.uid] == 'electron'
+        && d().memberUids == [request.auth.uid]
+        && d().memberProfiles.keys().hasOnly([request.auth.uid])
+        && d().memberProfiles[request.auth.uid].role == 'electron'
+        && d().households.electron.ownerUid == request.auth.uid
+        && d().households.positron.ownerUid == null
+        && d().name is string && d().name.size() > 0 && d().name.size() <= 80
+        && getAfter(/databases/$(database)/documents/slugs/$(d().slug)).data.atomeId == atomeId;
+
+      // Mise à jour :
+      // - parents : nom de l'Atome et infos des foyers (sans changer les titulaires) ;
+      // - tout membre : son propre nom affiché (memberProfiles.{uid}), sans changer son rôle.
+      allow update: if signedIn() && request.auth.uid in resource.data.memberUids
+        && unchanged('members') && unchanged('memberUids') && unchanged('slug') && unchanged('createdBy')
+        && (
+          (
+            resource.data.members[request.auth.uid] in ['electron', 'positron']
+            && changedOnly(['name', 'households'])
+            && d().name.size() > 0 && d().name.size() <= 80
+            && d().households.electron.ownerUid == resource.data.households.electron.ownerUid
+            && d().households.positron.ownerUid == resource.data.households.positron.ownerUid
+          ) || (
+            changedOnly(['memberProfiles'])
+            && d().memberProfiles.diff(resource.data.memberProfiles).affectedKeys().hasOnly([request.auth.uid])
+            && d().memberProfiles[request.auth.uid].role == resource.data.memberProfiles[request.auth.uid].role
+          )
+        );
+
+      allow delete: if false;
+
+      // ─── Enfants (Protons) ───────────────────────────────────────────────
+      match /protons/{protonId} {
+        function validProton() {
+          return request.resource.data.firstName is string && request.resource.data.firstName.size() > 0
+            && request.resource.data.firstName.size() <= 80
+            && request.resource.data.lastName is string && request.resource.data.lastName.size() <= 80
+            && isIsoDate(request.resource.data.birthDate)
+            && request.resource.data.gender in ['female', 'male', 'other']
+            && request.resource.data.majorityAt is timestamp;
+        }
+        allow read: if isMember(atomeId);
+        allow create: if isParent(atomeId) && validProton() && request.resource.data.linkedUid == null;
+        // Parents : tant que l'enfant est mineur. Après 18 ans : uniquement l'enfant lié.
+        allow update: if validProton() && unchanged('linkedUid') && (
+          (isParent(atomeId) && request.time < resource.data.majorityAt)
+          || (resource.data.linkedUid != null && resource.data.linkedUid == request.auth.uid)
+        );
+        allow delete: if isParent(atomeId) && request.time < resource.data.majorityAt;
+      }
+
+      // ─── Jours de garde ──────────────────────────────────────────────────
+      match /days/{date} {
+        function requestPath(id) {
+          return /databases/$(database)/documents/atomes/$(atomeId)/changeRequests/$(id);
+        }
+        // La demande référencée passe à « approved » dans ce même lot, par l'utilisateur courant.
+        function approvedInThisBatch() {
+          let id = request.resource.data.lastChangeRequestId;
+          let after = getAfter(requestPath(id)).data;
+          return id is string
+            && after.status == 'approved'
+            && get(requestPath(id)).data.status != 'approved'
+            && after.lastActorUid == request.auth.uid
+            && date in after.dates;
+        }
+
+        allow read: if isMember(atomeId);
+        // Création : génération initiale (ou jour approuvé qui n'existait pas encore).
+        allow create: if isParent(atomeId)
+          && isIsoDate(date)
+          && request.resource.data.date == date
+          && request.resource.data.assignments is map;
+        // Mise à jour : soit ajout d'enfants non encore planifiés (génération), soit demande approuvée.
+        allow update: if isParent(atomeId) && unchanged('date') && (
+          (
+            changedOnly(['assignments'])
+            && request.resource.data.assignments.diff(resource.data.assignments).changedKeys().size() == 0
+            && request.resource.data.assignments.diff(resource.data.assignments).removedKeys().size() == 0
+          ) || (
+            approvedInThisBatch()
+            && request.resource.data.assignments.diff(resource.data.assignments).affectedKeys()
+                 .hasOnly(getAfter(requestPath(request.resource.data.lastChangeRequestId)).data.protonIds)
+          )
+        );
+        allow delete: if false;
+      }
+
+      // ─── Demandes de modification (machine à états) ─────────────────────
+      match /changeRequests/{requestId} {
+        function n() { return request.resource.data; }
+        function o() { return resource.data; }
+        function myRole() { return roleIn(atomeId); }
+
+        function validTransition() {
+          return
+            // L'autre parent arbitre une demande en attente.
+            (o().status in ['pending', 'counter_proposed'] && o().awaitingHousehold == myRole() && (
+              (n().status == 'approved'
+                && changedOnly(['status', 'awaitingHousehold', 'lastActorUid', 'history', 'updatedAt'])
+                && n().awaitingHousehold == o().awaitingHousehold)
+              || (n().status == 'counter_proposed' && n().awaitingHousehold != myRole())
+              || (n().status == 'rejected' && n().awaitingHousehold != myRole()
+                  && n().rejectionReason is string && n().rejectionReason.size() > 0)
+            ))
+            // Après un rejet, le demandeur révise ou annule.
+            || (o().status == 'rejected' && o().awaitingHousehold == myRole() && (
+              (n().status == 'pending' && n().awaitingHousehold != myRole())
+              || (n().status == 'cancelled' && changedOnly(['status', 'awaitingHousehold', 'lastActorUid', 'history', 'updatedAt']))
+            ))
+            // Le proposant retire sa demande.
+            || (o().status in ['pending', 'counter_proposed'] && o().awaitingHousehold != myRole()
+                && n().status == 'cancelled'
+                && changedOnly(['status', 'awaitingHousehold', 'lastActorUid', 'history', 'updatedAt']));
+        }
+
+        function validContent() {
+          return n().dates is list && n().dates.size() > 0 && n().dates.size() <= 366
+            && n().protonIds is list && n().protonIds.size() > 0
+            && isHousehold(n().targetHousehold)
+            && isHousehold(n().awaitingHousehold)
+            && n().history is list;
+        }
+
+        allow read: if isMember(atomeId);
+        allow create: if isParent(atomeId) && validContent()
+          && n().status == 'pending'
+          && n().createdBy == request.auth.uid
+          && n().createdByHousehold == myRole()
+          && n().awaitingHousehold != myRole()
+          && n().lastActorUid == request.auth.uid
+          && n().history.size() == 1;
+        allow update: if isParent(atomeId) && validContent()
+          && unchanged('createdBy') && unchanged('createdByHousehold')
+          && n().lastActorUid == request.auth.uid
+          && n().history.size() == o().history.size() + 1
+          && validTransition();
+        allow delete: if false;
+      }
+
+      // ─── Notes ───────────────────────────────────────────────────────────
+      match /notes/{noteId} {
+        allow read: if isMember(atomeId);
+        allow create: if isMember(atomeId)
+          && roleIn(atomeId) in ['electron', 'positron', 'proton']
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.authorRole == roleIn(atomeId)
+          && isIsoDate(request.resource.data.date)
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000;
+        allow update: if false;
+        allow delete: if signedIn() && resource.data.authorUid == request.auth.uid;
+      }
+
+      // ─── Notifications in-app ────────────────────────────────────────────
+      match /notifications/{notificationId} {
+        allow read: if signedIn() && resource.data.recipientUid == request.auth.uid;
+        allow create: if isMember(atomeId)
+          && request.resource.data.actorUid == request.auth.uid
+          && request.resource.data.recipientUid in get(atomePath(atomeId)).data.members
+          && request.resource.data.read == false;
+        allow update: if signedIn() && resource.data.recipientUid == request.auth.uid
+          && changedOnly(['read']);
+        allow delete: if signedIn() && resource.data.recipientUid == request.auth.uid;
+      }
+
+      // ─── Invitations (l'identifiant du document est le jeton secret) ────
+      match /invitations/{token} {
+        // Lecture directe par jeton (page d'invitation, même sans compte). Liste réservée aux membres.
+        allow get: if true;
+        allow list: if isMember(atomeId);
+        allow create: if isParent(atomeId)
+          && request.resource.data.token == token
+          && token.size() >= 32
+          && request.resource.data.atomeId == atomeId
+          && request.resource.data.invitedBy == request.auth.uid
+          && request.resource.data.status == 'pending'
+          && request.resource.data.role in ['positron', 'neutron', 'proton']
+          && request.resource.data.email is string
+          && (request.resource.data.role != 'positron'
+              || get(atomePath(atomeId)).data.households.positron.ownerUid == null);
+        allow update: if isParent(atomeId)
+          && resource.data.status == 'pending'
+          && request.resource.data.status == 'revoked'
+          && changedOnly(['status']);
+        allow delete: if false;
+      }
+    }
+
+  }
+}
