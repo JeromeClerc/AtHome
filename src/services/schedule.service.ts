@@ -241,6 +241,14 @@ export function subscribeOpenChangeRequests(
   )
 }
 
+/** Charge ponctuellement les demandes de modification en attente de validation (`pending` ou `counter_proposed`). */
+export async function fetchPendingChangeRequests(atomeId: string): Promise<ChangeRequest[]> {
+  const snap = await getDocs(
+    query(requestsOf(atomeId), where('status', 'in', ['pending', 'counter_proposed'])),
+  )
+  return listWithId<ChangeRequest>(snap)
+}
+
 /** Écoute l'historique des demandes clôturées (approuvées / annulées), les plus récentes d'abord. */
 export function subscribeClosedChangeRequests(
   atomeId: string,

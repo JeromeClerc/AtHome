@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { Alert, Button, Input, Modal, Select } from '@/components/ui'
 import { useAtome } from '@/hooks/useAtome'
 import { toFrenchError } from '@/services/firestore.helpers'
-import { fetchScheduleRange } from '@/services/schedule.service'
+import { fetchPendingChangeRequests, fetchScheduleRange } from '@/services/schedule.service'
 import type { IsoDate } from '@/types'
 import { cn } from '@/utils/cn'
 import { formatSwiss, fromIsoDate, toIsoDate } from '@/utils/dates'
@@ -107,7 +107,10 @@ export function PrintScheduleModal({ open, onClose }: Props) {
 
     setBusy(true)
     try {
-      const schedule = await fetchScheduleRange(atome.id, resolved.startDate, resolved.endDate)
+      const [schedule, pendingRequests] = await Promise.all([
+        fetchScheduleRange(atome.id, resolved.startDate, resolved.endDate),
+        fetchPendingChangeRequests(atome.id),
+      ])
       const html = buildPrintableHtml({
         mode,
         startDate: resolved.startDate,
@@ -116,6 +119,7 @@ export function PrintScheduleModal({ open, onClose }: Props) {
         atome,
         protons,
         schedule,
+        pendingRequests,
       })
       printWindow.document.open()
       printWindow.document.write(html)

@@ -2,7 +2,8 @@ import { eachMonthOfInterval, endOfMonth, endOfWeek, format, startOfMonth, start
 import { fr } from 'date-fns/locale'
 import { buildCalendarIndex } from '@/config/vaudCalendar'
 import { HOUSEHOLD_STYLES } from '@/config/theme'
-import type { Atome, Household, IsoDate, Proton, ScheduleMap } from '@/types'
+import type { Atome, ChangeRequest, Household, IsoDate, Proton, ScheduleMap } from '@/types'
+import { isAwaitingDecision } from './changeRequestMachine'
 import { eachIsoDate, formatSwiss, fromIsoDate, isIsoDate, isWeekend, toIsoDate } from './dates'
 import { computeStats, percent } from './stats'
 
@@ -16,6 +17,8 @@ export interface PrintScheduleConfig {
   atome: Atome
   protons: Proton[]
   schedule: ScheduleMap
+  /** Demandes en attente de validation (affichées avec hachures sur le calendrier, exclues des statistiques). */
+  pendingRequests?: ChangeRequest[]
 }
 
 /**
@@ -72,10 +75,19 @@ function resolveDayHousehold(
  * - Année entière ou plage de dates : orientation Paysage (`@page { size: A4 landscape; }`).
  */
 export function buildPrintableHtml(config: PrintScheduleConfig): string {
-  const { mode, startDate, endDate, periodTitle, atome, protons, schedule } = config
+  const { mode, startDate, endDate, periodTitle, atome, protons, schedule, pendingRequests = [] } = config
   const orientation = mode === 'month' ? 'portrait' : 'landscape'
   const electronLabel = atome.households.electron.label || HOUSEHOLD_STYLES.electron.label
   const positronLabel = atome.households.positron.label || HOUSEHOLD_STYLES.positron.label
+
+  // Index des jours ayant une demande en attente de validation (pour l'affichage des hachures uniquement, pas dans les stats).
+  const pendingByDate = new Map<IsoDate, Household>()
+  for (const r of pendingRequests) {
+    if (!isAwaitingDecision(r.status)) continue
+    for (const d of r.dates) {
+      if (!pendingByDate.has(d)) pendingByDate.set(d, r.targetHousehold)
+    }
+  }
 
   const stats = computeStats(schedule, startDate, endDate)
   const peAll = percent(stats.all.electron, stats.all.total)
@@ -114,6 +126,10 @@ export function buildPrintableHtml(config: PrintScheduleConfig): string {
               if (resolved.kind === 'electron') bgClass = wknd ? 'cell-electron-wknd' : 'cell-electron'
               else if (resolved.kind === 'positron') bgClass = wknd ? 'cell-positron-wknd' : 'cell-positron'
               else if (resolved.kind === 'mixed') bgClass = 'cell-mixed'
+              const pendingTarget = pendingByDate.get(d)
+              if (pendingTarget) {
+                bgClass += ` cell-pending cell-pending-${pendingTarget}`
+              }
             }
 
             const householdText =
@@ -194,6 +210,8 @@ export function buildPrintableHtml(config: PrintScheduleConfig): string {
 
                 if (info?.holiday && inRange) cls += ' mini-holiday'
                 if (info?.schoolHoliday && inRange) cls += ' mini-school'
+                const pendingTarget = inRange ? pendingByDate.get(d) : undefined
+                if (pendingTarget) cls += ` cell-pending cell-pending-${pendingTarget}`
 
                 return `<td class="${cls}">${dayNum}</td>`
               })
@@ -311,6 +329,35 @@ export function buildPrintableHtml(config: PrintScheduleConfig): string {
     .cell-mixed {
       background: linear-gradient(135deg, #bae6fd 50%, #fde68a 50%) !important;
       color: #0f172a;
+    }
+    .cell-pending {
+      background-image: repeating-linear-gradient(
+        135deg,
+        rgba(100, 116, 139, 0.30) 0 4px,
+        transparent 4px 9px
+      ) !important;
+    }
+    .cell-pending.cell-mixed {
+      background-image:
+        repeating-linear-gradient(135deg, rgba(100, 116, 139, 0.30) 0 4px, transparent 4px 9px),
+        linear-gradient(135deg, #bae6fd 50%, #fde68a 50%) !important;
+    }
+    .cell-pending-electron {
+      outline: 2px dashed #0284c7;
+      outline-offset: -2px;
+    }
+    .cell-pending-positron {
+      outline: 2px dashed #d97706;
+      outline-offset: -2px;
+    }
+    .swatch-pending {
+      background-color: #f8fafc;
+      background-image: repeating-linear-gradient(
+        135deg,
+        rgba(100, 116, 139, 0.38) 0 3px,
+        transparent 3px 6px
+      ) !important;
+      border: 1.5px dashed #475569 !important;
     }
     .cell-none { background-color: #ffffff; }
     .cell-outside { background-color: #f8fafc; color: #cbd5e1; }
@@ -534,6 +581,10 @@ export function buildPrintableHtml(config: PrintScheduleConfig): string {
       <span class="legend-item">
         <span class="swatch-school"></span>
         <span>Vacances scolaires vaudoises</span>
+      </span>
+      <span class="legend-item">
+        <span class="swatch swatch-pending"></span>
+        <span>Modification en attente de validation</span>
       </span>
     </div>
     <div>Généré depuis At Home le ${formatSwiss(toIsoDate(new Date()))}</div>

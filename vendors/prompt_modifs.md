@@ -1,5 +1,15 @@
 # Modifications
 
+## Impression des planning
+Lors de la génération du PDF, tiens également compte des jours en attente de validation. Pas dans les statistiques, mais juste ajouter les hachures, comme dans l'application, pour indiquer les jours qui doivent encore être validés.
+
+## Livraison
+- L'application prête pour npm run build et déploiement sur Firebase.
+
+
+
+
+
 ## Répartition des jours par année
 Cet encadré est parfait tel qu'il est. A coté du bouton servant à naviguer entre les années, ajoute un bouton libellé de la période sur laquelle le planning a été généré pour la dernière fois. (par ex: 2026-2040).
 Ce bouton est clicable et affiche les statistiques de répartition annuels : Jours totaux, Vacances scolaires, Jours fériés et week-ends sous forme de moyenne pour la période générée. Par exemple, la moyenne de :
