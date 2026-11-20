@@ -91,6 +91,58 @@ export function computeStats(schedule: ScheduleMap, start: IsoDate, end: IsoDate
   }
 }
 
+/**
+ * Calcule la moyenne annuelle des statistiques de répartition (Jours totaux, Vacances scolaires,
+ * Jours fériés, Week-ends) sur une plage d'années `[startYear, endYear]`.
+ *
+ * Pour chaque statistique : `(valeur année 1 + valeur année 2 + ...) / nombre d'années planifiées`.
+ * Les pourcentages correspondent ainsi à la moyenne sur l'ensemble de la période générée.
+ */
+export function computeAverageAnnualStats(
+  schedule: ScheduleMap,
+  startYear: number,
+  endYear: number,
+  protonId?: string | null,
+): { stats: CustodyStats; yearsCount: number } {
+  const yearly: CustodyStats[] = []
+  for (let y = startYear; y <= endYear; y += 1) {
+    const s = computeStats(schedule, `${y}-01-01`, `${y}-12-31`, protonId)
+    if (s.all.total > 0) yearly.push(s)
+  }
+  const n = yearly.length
+  if (n === 0) {
+    return {
+      stats: { all: empty(), publicHolidays: empty(), schoolHolidays: empty(), weekends: empty() },
+      yearsCount: 0,
+    }
+  }
+  const avgCategory = (pick: (s: CustodyStats) => SplitCount): SplitCount => {
+    let sumE = 0
+    let sumP = 0
+    let sumT = 0
+    for (const s of yearly) {
+      const c = pick(s)
+      sumE += c.electron
+      sumP += c.positron
+      sumT += c.total
+    }
+    return roundSplit({
+      electron: sumE / n,
+      positron: sumP / n,
+      total: Math.round((sumT / n) * 10) / 10,
+    })
+  }
+  return {
+    stats: {
+      all: avgCategory((s) => s.all),
+      publicHolidays: avgCategory((s) => s.publicHolidays),
+      schoolHolidays: avgCategory((s) => s.schoolHolidays),
+      weekends: avgCategory((s) => s.weekends),
+    },
+    yearsCount: n,
+  }
+}
+
 function resolveDatesAssignment(
   schedule: ScheduleMap,
   dates: IsoDate[],

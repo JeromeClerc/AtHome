@@ -1,5 +1,7 @@
-import { Baby, CalendarDays, CircleHelp, Home, LogOut, Menu, Moon, Sun, UserRound } from 'lucide-react'
+import { Baby, CalendarDays, CircleHelp, Home, LogOut, Menu, Moon, Printer, Sun, UserRound } from 'lucide-react'
+import { useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
+import { PrintScheduleModal } from '@/components/calendar/PrintScheduleModal'
 import { Avatar, Badge, Dropdown } from '@/components/ui'
 import { ROLE_BADGE, ROLE_LABELS } from '@/config/theme'
 import { useAtome } from '@/hooks/useAtome'
@@ -18,13 +20,14 @@ const HAMBURGER_MENU = [
 
 /**
  * En-tête global : logo + nom de l'Atome à gauche ; à droite, de gauche à droite :
- * cloche des notifications, Planning, Aide, menu hamburger (Mon profil, Enfants, Foyer & invitations),
+ * cloche des notifications, Planning, Imprimer, Aide, menu hamburger (Mon profil, Enfants, Foyer & invitations),
  * et tout à droite le bouton utilisateur avec les initiales.
  */
 export function Header() {
   const { atome, role, displayName } = useAtome()
   const { user } = useAuth()
   const { resolved, toggle } = useTheme()
+  const [printOpen, setPrintOpen] = useState(false)
   const base = `/${atome.slug}`
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -49,19 +52,27 @@ export function Header() {
           {/* 1. Cloche des notifications (à gauche de Planning) */}
           <NotificationBell />
 
-          {/* 2. Menu Planning (landing page, à gauche d'Aide) & 3. Menu Aide (à gauche du hamburger) */}
+          {/* 2. Menu Planning, 3. Menu Imprimer (entre Planning et Aide) & 4. Menu Aide */}
           <nav aria-label="Navigation principale" className="flex items-center gap-1">
             <NavLink to={base} end className={linkClass}>
               <CalendarDays className="h-4 w-4" aria-hidden />
               <span>Planning</span>
             </NavLink>
+            <button
+              type="button"
+              onClick={() => setPrintOpen(true)}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              <Printer className="h-4 w-4" aria-hidden />
+              <span>Imprimer</span>
+            </button>
             <NavLink to={`${base}/aide`} className={linkClass}>
               <CircleHelp className="h-4 w-4" aria-hidden />
               <span>Aide</span>
             </NavLink>
           </nav>
 
-          {/* 4. Menu hamburger (à gauche du bouton utilisateur : Mon profil, Enfants, Foyer & invitations) */}
+          {/* 5. Menu hamburger (à gauche du bouton utilisateur : Mon profil, Enfants, Foyer & invitations) */}
           <Dropdown
             className="w-60 p-2"
             trigger={({ toggle: t, open }) => (
@@ -70,7 +81,7 @@ export function Header() {
                 onClick={t}
                 aria-expanded={open}
                 aria-label="Ouvrir le menu"
-                className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                className="cursor-pointer rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
               >
                 <Menu className="h-5 w-5" />
               </button>
@@ -88,11 +99,17 @@ export function Header() {
             )}
           </Dropdown>
 
-          {/* 5. Bouton utilisateur avec initiales (tout à droite de l'en-tête) */}
+          {/* 6. Bouton utilisateur avec initiales (tout à droite de l'en-tête) */}
           <Dropdown
             className="w-64"
             trigger={({ toggle: t, open }) => (
-              <button type="button" onClick={t} aria-expanded={open} aria-label="Mon compte" className="rounded-full p-0.5">
+              <button
+                type="button"
+                onClick={t}
+                aria-expanded={open}
+                aria-label="Mon compte"
+                className="cursor-pointer rounded-full p-0.5"
+              >
                 <Avatar
                   name={displayName}
                   ring={role === 'electron' ? 'ring-sky-500' : role === 'positron' ? 'ring-amber-500' : 'ring-fuchsia-500'}
@@ -111,7 +128,7 @@ export function Header() {
                 <button
                   type="button"
                   onClick={toggle}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
                   {resolved === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                   {resolved === 'dark' ? 'Mode clair' : 'Mode sombre'}
@@ -133,7 +150,7 @@ export function Header() {
                 <button
                   type="button"
                   onClick={() => void logout()}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
                 >
                   <LogOut className="h-4 w-4" /> Se déconnecter
                 </button>
@@ -142,6 +159,8 @@ export function Header() {
           </Dropdown>
         </div>
       </div>
+
+      {printOpen && <PrintScheduleModal open={printOpen} onClose={() => setPrintOpen(false)} />}
     </header>
   )
 }

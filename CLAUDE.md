@@ -83,10 +83,16 @@ Les dates « jour » sont **toujours** des chaînes ISO `yyyy-MM-dd` (pas de fus
        (Parent 1 années paires, Parent 2 années impaires).
      - *Noël & Nouvel An* : découpe les vacances scolaires d'hiver en 2 blocs égaux — Bloc 1 (incluant 24 et 25.12) au Parent 1 les années
        paires (Parent 2 les années impaires), Bloc 2 (incluant 31.12 et 01.01) au Parent 2 les années paires (Parent 1 les années impaires).
-5. **Statistiques d'équité & Fêtes majeures** (`src/utils/stats.ts`, `StatsBar.tsx`) :
+5. **Statistiques d'équité, Moyenne pluriannuelle & Fêtes majeures** (`src/utils/stats.ts`, `StatsBar.tsx`) :
    - Compteurs annuels exprimés en **vrais jours calendaires** (sur 365/366 j, 9 fériés, etc.) via la moyenne des enfants de l'Atome.
+   - Bouton cliquable de la période générée (ex. `2026-2040`) affichant la **moyenne annuelle** (jours/an et %) sur l'ensemble des années
+     planifiées pour Jours totaux, Vacances scolaires, Jours fériés et Week-ends (`computeAverageAnnualStats`, sans les Fêtes majeures).
    - Bandeau **« Fêtes majeures »** sur les 3 jalons : Pâques (dimanche de Pâques), Noël (24 et 25.12 — affiche les deux foyers si partagé),
      et Nouvel An (31.12 et 01.01 — affiche les deux foyers si partagé).
+6. **Impression & Export PDF** (`src/components/calendar/PrintScheduleModal.tsx`, `src/utils/printSchedule.ts`) :
+   - Menu « Imprimer » dans l'en-tête (entre « Planning » et « Aide ») ouvrant une modale (année entière en paysage, mois entier en portrait,
+     ou plage `dd.mm.aaaa` à `dd.mm.aaaa` en paysage) et générant un document imprimable / PDF dans un nouvel onglet (avec nom de l'Atome,
+     période, répartition des jours totaux et légende).
 6. **Vacances scolaires vaudoises** : table officielle par année scolaire + heuristique de repli pour les
    années non saisies (à mettre à jour chaque année depuis vd.ch).
 7. **Majorité** (`src/utils/age.ts`) : dès 18 ans révolus, la fiche d'un proton est en lecture seule pour les

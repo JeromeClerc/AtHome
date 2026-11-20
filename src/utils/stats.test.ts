@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { generateSchedule } from './scheduleGenerator'
-import { computeMajorHolidays, computeStats, percent } from './stats'
+import { computeAverageAnnualStats, computeMajorHolidays, computeStats, percent } from './stats'
 
 describe('computeStats', () => {
   const schedule = generateSchedule({
@@ -53,5 +53,22 @@ describe('computeStats', () => {
     const splitNoel = computeMajorHolidays(withBlocks, 2026).find((m) => m.key === 'noel')
     expect(splitNoel?.household).toBe('mixed')
     expect(splitNoel?.households).toEqual(['electron', 'positron'])
+  })
+
+  it('calcule la moyenne annuelle des statistiques sur une période pluriannuelle (ex. 2026-2027)', () => {
+    const multiYear = generateSchedule({
+      startDate: '2026-01-01',
+      endDate: '2027-12-31',
+      pattern: 'weekly',
+      firstHousehold: 'electron',
+      protonIds: ['a', 'b'],
+      applyHolidayBlocks: true,
+      evenYearHolidayHousehold: 'electron',
+    })
+    const avg = computeAverageAnnualStats(multiYear, 2026, 2027)
+    expect(avg.yearsCount).toBe(2)
+    expect(avg.stats.all.total).toBe(365)
+    expect(avg.stats.publicHolidays.total).toBe(9)
+    expect(Math.round(avg.stats.all.electron + avg.stats.all.positron)).toBe(365)
   })
 })

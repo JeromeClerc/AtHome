@@ -5,6 +5,7 @@ import {
   CalendarDays,
   CheckCircle2,
   CircleHelp,
+  Printer,
   Scale,
   Settings,
   ShieldCheck,
@@ -23,8 +24,9 @@ const SECTIONS = [
   { id: 'fonctionnalites', label: '2. Fonctionnalités du planning', icon: CalendarDays },
   { id: 'demandes-biff', label: '3. Demandes & Médiation BIFF', icon: ShieldCheck },
   { id: 'calculs', label: '4. Modes de calcul & Calendrier VD', icon: Wand2 },
-  { id: 'statistiques', label: '5. Statistiques & Fêtes majeures', icon: Scale },
-  { id: 'parametrages', label: '6. Paramétrages & Notifications', icon: Settings },
+  { id: 'statistiques', label: '5. Statistiques & Période globale', icon: Scale },
+  { id: 'impression', label: '6. Impression & Export PDF', icon: Printer },
+  { id: 'parametrages', label: '7. Paramétrages & Notifications', icon: Settings },
 ] as const
 
 /**
@@ -441,10 +443,10 @@ export function HelpPage() {
       <section id="statistiques" className="scroll-mt-20">
         <Card>
           <CardHeader
-            title="5. Statistiques d'équité & Fêtes majeures"
-            description="Des compteurs basés sur le nombre réel de jours de l'année (365 ou 366 jours)."
+            title="5. Statistiques d'équité, Moyenne pluriannuelle & Fêtes majeures"
+            description="Des compteurs basés sur le nombre réel de jours de l'année (365 ou 366 jours) et une vue moyenne sur toute la période générée."
           />
-          <div className="space-y-3 p-5 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+          <div className="space-y-4 p-5 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
             <p className="text-xs text-slate-600 dark:text-slate-400">
               En haut du tableau de bord (<Link to={base} className="font-medium text-brand-600 underline">Planning</Link>), le bandeau de
               répartition affiche la moyenne des enfants de l&apos;Atome sur les <strong>vrais jours calendaires de l&apos;année</strong>{' '}
@@ -490,15 +492,100 @@ export function HelpPage() {
                 </ol>
               </div>
             </div>
+
+            <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4 text-xs dark:border-brand-900/50 dark:bg-brand-950/25">
+              <p className="font-semibold text-brand-900 dark:text-brand-100">
+                Bouton de période globale générée (ex. « 2026-2040 ») — Moyenne annuelle sur l&apos;ensemble du planning
+              </p>
+              <p className="mt-1 text-slate-600 dark:text-slate-400">
+                À côté des flèches permettant de naviguer d&apos;une année à l&apos;autre, un bouton affiche la{' '}
+                <strong>période complète sur laquelle le planning a été généré</strong> (par exemple <code>2026-2040</code>). En cliquant
+                dessus :
+              </p>
+              <ul className="mt-1.5 list-disc space-y-1 pl-4 text-slate-600 dark:text-slate-400">
+                <li>
+                  Les 4 compteurs (<strong>Jours totaux</strong>, <strong>Vacances scolaires</strong>, <strong>Jours fériés</strong> et{' '}
+                  <strong>Week-ends</strong>) affichent la <strong>moyenne annuelle en jours/an et en pourcentage</strong> sur toute la
+                  période générée (somme des jours de chaque année divisée par le nombre d&apos;années planifiées).
+                </li>
+                <li>
+                  Cela permet de constater d&apos;un seul clic que, même si une année isolée est à 51 % / 49 %, la répartition s&apos;équilibre
+                  parfaitement autour de <strong>50 % / 50 % sur la durée totale du planning</strong>.
+                </li>
+                <li>
+                  L&apos;encart <em>Fêtes majeures</em> n&apos;est affiché qu&apos;en vue par année individuelle. Cliquez à nouveau sur le
+                  bouton de période ou sur les flèches d&apos;année pour revenir à l&apos;année sélectionnée.
+                </li>
+              </ul>
+            </div>
           </div>
         </Card>
       </section>
 
-      {/* 6. Paramétrages possibles & Notifications */}
+      {/* 6. Impression & Export PDF */}
+      <section id="impression" className="scroll-mt-20">
+        <Card>
+          <CardHeader
+            title="6. Impression & Export PDF du planning"
+            description="Générez un document PDF clair et complet en un clic depuis le menu « Imprimer » de l'en-tête."
+          />
+          <div className="space-y-4 p-5 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Le bouton <strong>« Imprimer »</strong> situé dans l&apos;en-tête (entre <em>Planning</em> et <em>Aide</em>) ouvre une fenêtre
+              permettant d&apos;exporter ou d&apos;imprimer le planning selon <strong>3 modes de sélection de période</strong> :
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 p-3.5 text-xs dark:border-slate-800">
+                <p className="font-semibold text-slate-900 dark:text-white">1. Une année entière</p>
+                <p className="mt-1 text-slate-600 dark:text-slate-400">
+                  Génère les 12 mois de l&apos;année choisie en <strong>orientation Paysage (A4)</strong> sur une seule vue synthétique.
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-3.5 text-xs dark:border-slate-800">
+                <p className="font-semibold text-slate-900 dark:text-white">2. Un mois entier</p>
+                <p className="mt-1 text-slate-600 dark:text-slate-400">
+                  Génère la grille détaillée du mois sélectionné en <strong>orientation Portrait (A4)</strong> avec le nom du foyer sur
+                  chaque jour, l&apos;intitulé des jours fériés et les barres de vacances scolaires.
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-3.5 text-xs dark:border-slate-800">
+                <p className="font-semibold text-slate-900 dark:text-white">3. Une plage de dates (JJ.MM.AAAA)</p>
+                <p className="mt-1 text-slate-600 dark:text-slate-400">
+                  Permet de saisir librement une date de début et une date de fin au format suisse <code>dd.mm.aaaa</code> (ex.{' '}
+                  <code>01.06.2026</code> à <code>31.08.2026</code>) en <strong>orientation Paysage (A4)</strong>.
+                </p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 text-xs dark:border-slate-800 dark:bg-slate-800/30">
+              <p className="font-semibold text-slate-900 dark:text-white">Informations incluses sur chaque document généré :</p>
+              <ul className="mt-1.5 list-disc space-y-1 pl-4 text-slate-600 dark:text-slate-400">
+                <li>
+                  Le <strong>nom de l&apos;Atome</strong>, les enfants concernés et l&apos;intitulé de l&apos;année, du mois ou de la
+                  période sélectionnée.
+                </li>
+                <li>
+                  Un encart compact résumant la <strong>répartition des jours totaux</strong> (ainsi que des vacances scolaires, jours
+                  fériés et week-ends) sur la période imprimée.
+                </li>
+                <li>
+                  La <strong>légende complète</strong> (couleurs et noms des deux foyers, jours fériés officiels du Canton de Vaud et
+                  vacances scolaires vaudoises).
+                </li>
+                <li>
+                  Le document s&apos;ouvre dans un nouvel onglet prêt à être envoyé vers une imprimante ou enregistré via{' '}
+                  <em>« Enregistrer au format PDF »</em>.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </Card>
+      </section>
+
+      {/* 7. Paramétrages possibles & Notifications */}
       <section id="parametrages" className="scroll-mt-20">
         <Card>
           <CardHeader
-            title="6. Paramétrages possibles & Notifications"
+            title="7. Paramétrages possibles & Notifications"
             description="Où configurer vos foyers, vos invitations, vos enfants et vos alertes mobiles."
           />
           <div className="grid gap-4 p-5 sm:grid-cols-3">

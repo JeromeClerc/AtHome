@@ -41,7 +41,7 @@ export function NotificationBell() {
           onClick={toggle}
           aria-expanded={isOpen}
           aria-label={`Notifications (${unreadCount} non lues)`}
-          className="relative rounded-full p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+          className="relative cursor-pointer rounded-full p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (

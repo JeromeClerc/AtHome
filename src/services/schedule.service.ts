@@ -3,6 +3,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -66,6 +67,82 @@ export function subscribeDays(
     (snap) => cb(snap.docs.map((d) => d.data() as CustodyDay)),
     onError,
   )
+}
+
+/** Charge ponctuellement le planning (`ScheduleMap`) d'une plage `[start, end]`. */
+export async function fetchScheduleRange(atomeId: string, start: IsoDate, end: IsoDate): Promise<ScheduleMap> {
+  const snap = await getDocs(
+    query(daysOf(atomeId), where('date', '>=', start), where('date', '<=', end), orderBy('date')),
+  )
+  const map: ScheduleMap = {}
+  for (const d of snap.docs) {
+    const data = d.data() as CustodyDay
+    map[data.date] = data.assignments
+  }
+  return map
+}
+
+export interface GeneratedPeriodRange {
+  start: IsoDate
+  end: IsoDate
+  startYear: number
+  endYear: number
+}
+
+/**
+ * Écoute en temps réel les bornes (première et dernière date planifiées) du planning généré
+ * dans `atomes/{atomeId}/days` (2 lectures légères `limit(1)`).
+ */
+export function subscribeGeneratedPeriodRange(
+  atomeId: string,
+  cb: (range: GeneratedPeriodRange | null) => void,
+  onError?: (e: Error) => void,
+): () => void {
+  let minDate: IsoDate | null = null
+  let maxDate: IsoDate | null = null
+  let minReady = false
+  let maxReady = false
+
+  const emit = () => {
+    if (!minReady || !maxReady) return
+    if (!minDate || !maxDate) {
+      cb(null)
+    } else {
+      cb({
+        start: minDate,
+        end: maxDate,
+        startYear: Number(minDate.slice(0, 4)),
+        endYear: Number(maxDate.slice(0, 4)),
+      })
+    }
+  }
+
+  const unsubMin = onSnapshot(
+    query(daysOf(atomeId), orderBy('date', 'asc'), limit(1)),
+    (snap) => {
+      const first = snap.docs[0]?.data() as CustodyDay | undefined
+      minDate = first?.date ?? null
+      minReady = true
+      emit()
+    },
+    onError,
+  )
+
+  const unsubMax = onSnapshot(
+    query(daysOf(atomeId), orderBy('date', 'desc'), limit(1)),
+    (snap) => {
+      const last = snap.docs[0]?.data() as CustodyDay | undefined
+      maxDate = last?.date ?? null
+      maxReady = true
+      emit()
+    },
+    onError,
+  )
+
+  return () => {
+    unsubMin()
+    unsubMax()
+  }
 }
 
 export interface GenerationReport {

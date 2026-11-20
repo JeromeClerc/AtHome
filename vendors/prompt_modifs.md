@@ -1,6 +1,55 @@
 # Modifications
 
 ## Répartition des jours par année
+Cet encadré est parfait tel qu'il est. A coté du bouton servant à naviguer entre les années, ajoute un bouton libellé de la période sur laquelle le planning a été généré pour la dernière fois. (par ex: 2026-2040).
+Ce bouton est clicable et affiche les statistiques de répartition annuels : Jours totaux, Vacances scolaires, Jours fériés et week-ends sous forme de moyenne pour la période générée. Par exemple, la moyenne de :
+- nombre de jours parent 1 2026 + nombre de jours parent 1 2027 + nombre de jours parent 1 2028 + ...
+- faire pareil pour les pourcentages
+- faire pareil pour toutes les statistiques
+- Ne pas faire ce calcul pour les "Fêtes majeures"
+
+## Entête de l'application
+- Ajouter un attribut CSS : cursor: pointer; sur :
+  - La cloche des notifications
+  - Le menu hamburger
+  - Le bouton utilisateur
+- Entre "Planning" et "Aide", ajouter un menu "Imprimer"
+
+En cliquant sur le menu "Imprimer", un modal s'ouvre pour proposer diverses options de sélection de période :
+- Une année entière
+- Un mois entier
+- Une plage dd.mm.aaaa à dd.mm.aaaa
+
+Une fois la plage sélectionnée, cliquer sur "Valider" ou "Imprimer" selon ce que tu juges être le plus approprié et générer un PDF dans un nouvel onglet du navigateur, prêt à être imprimé ou téléchargé.
+
+- Pour l'impression d'un mois, orientation portrait.
+- Pour l'impression d'une année ou périonde donnée, orientation paysage.
+- Chaque impression contient les informations utiles suivantes :
+  - Nom de l'Atome.
+  - Année, mois ou période sélectionnée.
+  - En petit, une répartition des jours totaux sur la période définie.
+  - Légende.
+
+## Documentation
+Complète la documentation :
+- Parle de la nouvel répartition des jours sur l'ensemble du planning généré
+- Explique les différentes possibilités d'impression. 
+
+## Livraison
+- L'application prête pour npm run build et déploiement sur Firebase.
+
+
+
+
+
+
+
+
+
+
+
+
+## Répartition des jours par année
 - Je ne comprends pas les calculs :
   - Jours-enfants-totaux
     - 732 jours, alors qu'une année ne compte que 365/366 jours ?
