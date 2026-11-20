@@ -177,3 +177,80 @@ export function buildCalendarIndex(start: IsoDate, end: IsoDate): Map<IsoDate, D
 export function isVaudPublicHoliday(iso: IsoDate): boolean {
   return getVaudPublicHolidays(fromIsoDate(iso).getFullYear()).some((h) => h.date === iso)
 }
+
+export interface HolidaySubBlock {
+  start: IsoDate
+  end: IsoDate
+  dates: IsoDate[]
+}
+
+export interface WinterHolidayBlocks {
+  /** Année de début de la période des vacances d'hiver (décembre de `schoolYear` → janvier de `schoolYear + 1`). */
+  schoolYear: number
+  period: SchoolHolidayPeriod
+  /** Bloc 1 (Noël) : du début des vacances jusqu'au point médian (incluant les 24 et 25 décembre). */
+  christmasBlock: HolidaySubBlock
+  /** Bloc 2 (Nouvel An) : du point médian jusqu'à la fin des vacances (incluant les 31 décembre et 1er janvier). */
+  newYearBlock: HolidaySubBlock
+}
+
+export interface EasterHolidayBlock extends HolidaySubBlock {
+  year: number
+  /** Dimanche de Pâques (`yyyy-MM-dd`). */
+  easterDate: IsoDate
+}
+
+/**
+ * Découpe la période des vacances scolaires vaudoises de fin d'année (`noel`) en 2 blocs :
+ * - Bloc 1 (Noël) : du début des vacances jusqu'au point médian (incluant les 24 et 25 décembre).
+ * - Bloc 2 (Nouvel An) : du point médian jusqu'à la fin des vacances (incluant les 31 décembre et 1er janvier).
+ */
+export function getWinterHolidayBlocks(schoolYear: number): WinterHolidayBlocks {
+  const period = getSchoolHolidaysForSchoolYear(schoolYear).find((p) => p.kind === 'noel')
+  if (!period) throw new Error(`Aucune période de vacances d'hiver trouvée pour ${schoolYear}.`)
+  const dates = eachIsoDate(period.start, period.end)
+  let splitIndex = Math.floor(dates.length / 2)
+
+  const minSecondBlockStart = `${schoolYear}-12-26`
+  const maxSecondBlockStart = `${schoolYear}-12-31`
+  while (splitIndex < dates.length - 1 && (dates[splitIndex] as IsoDate) < minSecondBlockStart) {
+    splitIndex += 1
+  }
+  while (splitIndex > 1 && (dates[splitIndex] as IsoDate) > maxSecondBlockStart) {
+    splitIndex -= 1
+  }
+
+  const christmasDates = dates.slice(0, splitIndex)
+  const newYearDates = dates.slice(splitIndex)
+  return {
+    schoolYear,
+    period,
+    christmasBlock: {
+      start: christmasDates[0] as IsoDate,
+      end: christmasDates[christmasDates.length - 1] as IsoDate,
+      dates: christmasDates,
+    },
+    newYearBlock: {
+      start: newYearDates[0] as IsoDate,
+      end: newYearDates[newYearDates.length - 1] as IsoDate,
+      dates: newYearDates,
+    },
+  }
+}
+
+/**
+ * Calcule dynamiquement le bloc / week-end prolongé de Pâques (du Vendredi saint au Lundi de Pâques inclus)
+ * pour une année civile donnée.
+ */
+export function getEasterHolidayBlock(year: number): EasterHolidayBlock {
+  const easterDate = toIsoDate(easterSunday(year))
+  const start = addIsoDays(easterDate, -2)
+  const end = addIsoDays(easterDate, 1)
+  return {
+    year,
+    easterDate,
+    start,
+    end,
+    dates: eachIsoDate(start, end),
+  }
+}

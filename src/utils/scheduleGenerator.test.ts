@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Household } from '@/types'
-import { applyHolidayBridges, buildCycle, generateSchedule, parseCustomCycle } from './scheduleGenerator'
+import { applyHolidayBlocks, applyHolidayBridges, buildCycle, generateSchedule, getHolidayBlockHouseholds, parseCustomCycle } from './scheduleGenerator'
 import { eachIsoDate } from './dates'
 
 const P = ['p1']
@@ -131,5 +131,66 @@ describe('parseCustomCycle', () => {
   })
   it('rejette un symbole inconnu', () => {
     expect(() => parseCustomCycle('E X')).toThrow(/X/)
+  })
+})
+
+describe('applyHolidayBlocks & alternance années paires / impaires', () => {
+  it('alterne automatiquement années paires et années impaires avec option d’inversion A/B', () => {
+    expect(getHolidayBlockHouseholds(2026, 'electron')).toEqual({
+      christmas: 'electron',
+      newYear: 'positron',
+      easter: 'electron',
+    })
+    expect(getHolidayBlockHouseholds(2027, 'electron')).toEqual({
+      christmas: 'positron',
+      newYear: 'electron',
+      easter: 'positron',
+    })
+    expect(getHolidayBlockHouseholds(2026, 'positron')).toEqual({
+      christmas: 'positron',
+      newYear: 'electron',
+      easter: 'positron',
+    })
+  })
+
+  it('applique les blocs Noël / Nouvel An et Pâques sur 2025-2027', () => {
+    const s = generateSchedule({
+      startDate: '2025-12-20',
+      endDate: '2027-04-10',
+      pattern: 'weekly',
+      firstHousehold: 'electron',
+      protonIds: P,
+      applyHolidayBlocks: true,
+      evenYearHolidayHousehold: 'electron',
+    })
+
+    // Fin d'année 2025 (année impaire) : Noël → Positron (B), Nouvel An → Électron (A)
+    expect(s['2025-12-24']?.p1).toBe('positron')
+    expect(s['2025-12-25']?.p1).toBe('positron')
+    expect(s['2025-12-31']?.p1).toBe('electron')
+    expect(s['2026-01-01']?.p1).toBe('electron')
+
+    // Pâques 2026 (année paire) : Vendredi saint → Lundi de Pâques → Électron (A)
+    expect(s['2026-04-03']?.p1).toBe('electron')
+    expect(s['2026-04-05']?.p1).toBe('electron')
+    expect(s['2026-04-06']?.p1).toBe('electron')
+
+    // Fin d'année 2026 (année paire) : Noël → Électron (A), Nouvel An → Positron (B)
+    expect(s['2026-12-24']?.p1).toBe('electron')
+    expect(s['2026-12-25']?.p1).toBe('electron')
+    expect(s['2026-12-31']?.p1).toBe('positron')
+    expect(s['2027-01-01']?.p1).toBe('positron')
+
+    // Pâques 2027 (année impaire, dimanche 28.03.2027) → Positron (B)
+    expect(s['2027-03-26']?.p1).toBe('positron')
+    expect(s['2027-03-28']?.p1).toBe('positron')
+    expect(s['2027-03-29']?.p1).toBe('positron')
+  })
+
+  it('retourne la liste des dates modifiées par applyHolidayBlocks', () => {
+    const days = new Map<string, Household>()
+    for (const d of eachIsoDate('2026-04-03', '2026-04-06')) days.set(d, 'positron')
+    const changed = applyHolidayBlocks(days, 'electron')
+    expect(changed).toEqual(['2026-04-03', '2026-04-04', '2026-04-05', '2026-04-06'])
   })
 })

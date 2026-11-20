@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { generateSchedule } from './scheduleGenerator'
-import { computeStats, percent } from './stats'
+import { computeMajorHolidays, computeStats, percent } from './stats'
 
 describe('computeStats', () => {
   const schedule = generateSchedule({
@@ -27,5 +27,28 @@ describe('computeStats', () => {
   it('percent', () => {
     expect(percent(1, 3)).toBe(33)
     expect(percent(0, 0)).toBe(0)
+  })
+
+  it('calcule les 3 fêtes majeures (Pâques, Noël, Nouvel An) selon le planning actif', () => {
+    const withBlocks = generateSchedule({
+      startDate: '2025-12-20',
+      endDate: '2026-12-31',
+      pattern: 'weekly',
+      firstHousehold: 'electron',
+      protonIds: ['a', 'b'],
+      applyHolidayBlocks: true,
+      evenYearHolidayHousehold: 'electron',
+    })
+    const milestones = computeMajorHolidays(withBlocks, 2026)
+    expect(milestones).toEqual([
+      { key: 'paques', label: 'Pâques', date: '2026-04-05', household: 'electron' },
+      { key: 'noel', label: 'Noël', date: '2026-12-25', household: 'electron' },
+      { key: 'nouvel_an', label: 'Nouvel An', date: '2026-01-01', household: 'electron' },
+    ])
+
+    // Simulation d'un échange validé sur Noël pour l'enfant 'a' uniquement
+    withBlocks['2026-12-25'] = { a: 'positron', b: 'electron' }
+    expect(computeMajorHolidays(withBlocks, 2026).find((m) => m.key === 'noel')?.household).toBe('mixed')
+    expect(computeMajorHolidays(withBlocks, 2026, 'a').find((m) => m.key === 'noel')?.household).toBe('positron')
   })
 })

@@ -21,6 +21,7 @@ const FoyerPage = lazy(() => import('@/pages/SetupAtomePage').then((m) => ({ def
 const DashboardPage = lazy(() => import('@/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })))
 const ProtonsPage = lazy(() => import('@/pages/ProtonsPage').then((m) => ({ default: m.ProtonsPage })))
 const ProfilePage = lazy(() => import('@/pages/ProfilePage').then((m) => ({ default: m.ProfilePage })))
+const HelpPage = lazy(() => import('@/pages/HelpPage').then((m) => ({ default: m.HelpPage })))
 const CompleteProfileForm = lazy(() => import('@/pages/AuthPage').then((m) => ({ default: m.CompleteProfileForm })))
 
 /**
@@ -168,6 +169,7 @@ export default function App() {
             >
               <Route element={<MainLayout />}>
                 <Route index element={<DashboardPage />} />
+                <Route path="aide" element={<HelpPage />} />
                 <Route path="enfants" element={<ProtonsPage />} />
                 <Route path="foyer" element={<FoyerPage />} />
                 <Route path="profil" element={<ProfilePage />} />

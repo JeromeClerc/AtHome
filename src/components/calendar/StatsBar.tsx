@@ -1,11 +1,12 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 import { useState } from 'react'
-import { Card } from '@/components/ui'
-import { HOUSEHOLD_STYLES } from '@/config/theme'
+import { Badge, Card } from '@/components/ui'
+import { HOUSEHOLD_STYLES, ROLE_BADGE } from '@/config/theme'
 import { useAtome } from '@/hooks/useAtome'
 import { useStats } from '@/hooks/useStats'
 import { cn } from '@/utils/cn'
-import { percent, type SplitCount } from '@/utils/stats'
+import { formatFr } from '@/utils/dates'
+import { percent, type MajorHolidayMilestone, type SplitCount } from '@/utils/stats'
 
 function SplitStat({ label, count }: { label: string; count: SplitCount }) {
   const pe = percent(count.electron, count.total)
@@ -32,12 +33,44 @@ function SplitStat({ label, count }: { label: string; count: SplitCount }) {
   )
 }
 
-/** Bandeau compact des statistiques de répartition (année civile, filtrable par enfant). */
+function MajorHolidayBadge({
+  milestone,
+  householdLabels,
+}: {
+  milestone: MajorHolidayMilestone
+  householdLabels: { electron: string; positron: string }
+}) {
+  const { household } = milestone
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200/80 bg-slate-50/70 px-2.5 py-1.5 text-xs dark:border-slate-800 dark:bg-slate-800/40">
+      <div className="flex items-baseline gap-1.5">
+        <span className="font-medium text-slate-800 dark:text-slate-100">{milestone.label}</span>
+        <span className="text-[11px] text-slate-400">{formatFr(milestone.date, 'dd.MM')}</span>
+      </div>
+      {household === 'electron' || household === 'positron' ? (
+        <Badge className={cn('inline-flex items-center gap-1', ROLE_BADGE[household])}>
+          <span className={cn('h-1.5 w-1.5 rounded-full', HOUSEHOLD_STYLES[household].dot)} />
+          {householdLabels[household]}
+        </Badge>
+      ) : household === 'mixed' ? (
+        <Badge className="bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-200">Partagé</Badge>
+      ) : (
+        <Badge className="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">Non planifié</Badge>
+      )}
+    </div>
+  )
+}
+
+/** Bandeau compact des statistiques de répartition (année civile, filtrable par enfant) + jalons des 3 fêtes majeures. */
 export function StatsBar({ initialYear }: { initialYear: number }) {
   const { protons, atome } = useAtome()
   const [year, setYear] = useState(initialYear)
   const [protonId, setProtonId] = useState<string | null>(null)
-  const { stats, loading } = useStats(`${year}-01-01`, `${year}-12-31`, protonId)
+  const { stats, majorHolidays, loading } = useStats(`${year}-01-01`, `${year}-12-31`, protonId)
+  const householdLabels = {
+    electron: atome.households.electron.label,
+    positron: atome.households.positron.label,
+  }
 
   return (
     <Card className="p-4">
@@ -81,6 +114,18 @@ export function StatsBar({ initialYear }: { initialYear: number }) {
         <SplitStat label="Vacances scolaires" count={stats.schoolHolidays} />
         <SplitStat label="Jours fériés" count={stats.publicHolidays} />
         <SplitStat label="Week-ends" count={stats.weekends} />
+      </div>
+
+      <div className="mt-4 border-t border-slate-200/80 pt-3 dark:border-slate-800">
+        <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+          <Sparkles className="h-3.5 w-3.5 text-brand-500" />
+          <span>Fêtes majeures ({year})</span>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {majorHolidays.map((m) => (
+            <MajorHolidayBadge key={m.key} milestone={m} householdLabels={householdLabels} />
+          ))}
+        </div>
       </div>
     </Card>
   )

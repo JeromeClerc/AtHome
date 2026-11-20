@@ -1,4 +1,4 @@
-import { Baby, CalendarDays, Home, LogOut, Menu, Moon, Sun, UserRound } from 'lucide-react'
+import { Baby, CalendarDays, CircleHelp, Home, LogOut, Menu, Moon, Sun, UserRound } from 'lucide-react'
 import { Link, NavLink } from 'react-router-dom'
 import { Avatar, Badge, Dropdown } from '@/components/ui'
 import { ROLE_BADGE, ROLE_LABELS } from '@/config/theme'
@@ -10,16 +10,16 @@ import { cn } from '@/utils/cn'
 import { Logo } from './Logo'
 import { NotificationBell } from './NotificationBell'
 
-const NAV = [
-  { to: '', label: 'Planning', icon: CalendarDays, end: true },
-  { to: 'enfants', label: 'Enfants', icon: Baby, end: false },
-  { to: 'foyer', label: 'Foyer & invitations', icon: Home, end: false },
-  { to: 'profil', label: 'Mon profil', icon: UserRound, end: false },
+const HAMBURGER_MENU = [
+  { to: 'profil', label: 'Mon profil', icon: UserRound },
+  { to: 'enfants', label: 'Enfants', icon: Baby },
+  { to: 'foyer', label: 'Foyer & invitations', icon: Home },
 ] as const
 
 /**
- * En-tête global : logo + nom de l'Atome à gauche ; à droite, dans l'ordre :
- * notifications, avatar (rôle + thème), menu principal.
+ * En-tête global : logo + nom de l'Atome à gauche ; à droite, de gauche à droite :
+ * cloche des notifications, Planning, Aide, menu hamburger (Mon profil, Enfants, Foyer & invitations),
+ * et tout à droite le bouton utilisateur avec les initiales.
  */
 export function Header() {
   const { atome, role, displayName } = useAtome()
@@ -46,8 +46,49 @@ export function Header() {
         </Link>
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
+          {/* 1. Cloche des notifications (à gauche de Planning) */}
           <NotificationBell />
 
+          {/* 2. Menu Planning (landing page, à gauche d'Aide) & 3. Menu Aide (à gauche du hamburger) */}
+          <nav aria-label="Navigation principale" className="flex items-center gap-1">
+            <NavLink to={base} end className={linkClass}>
+              <CalendarDays className="h-4 w-4" aria-hidden />
+              <span>Planning</span>
+            </NavLink>
+            <NavLink to={`${base}/aide`} className={linkClass}>
+              <CircleHelp className="h-4 w-4" aria-hidden />
+              <span>Aide</span>
+            </NavLink>
+          </nav>
+
+          {/* 4. Menu hamburger (à gauche du bouton utilisateur : Mon profil, Enfants, Foyer & invitations) */}
+          <Dropdown
+            className="w-60 p-2"
+            trigger={({ toggle: t, open }) => (
+              <button
+                type="button"
+                onClick={t}
+                aria-expanded={open}
+                aria-label="Ouvrir le menu"
+                className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            )}
+          >
+            {(close) => (
+              <nav aria-label="Menu de configuration" className="flex flex-col gap-1">
+                {HAMBURGER_MENU.map(({ to, label, icon: Icon }) => (
+                  <NavLink key={label} to={`${base}/${to}`} onClick={close} className={linkClass}>
+                    <Icon className="h-4 w-4" aria-hidden />
+                    {label}
+                  </NavLink>
+                ))}
+              </nav>
+            )}
+          </Dropdown>
+
+          {/* 5. Bouton utilisateur avec initiales (tout à droite de l'en-tête) */}
           <Dropdown
             className="w-64"
             trigger={({ toggle: t, open }) => (
@@ -99,43 +140,6 @@ export function Header() {
               </div>
             )}
           </Dropdown>
-
-          {/* Menu principal : liens en ligne sur grand écran, menu déroulant sur mobile. */}
-          <nav aria-label="Navigation principale" className="hidden items-center gap-1 lg:flex">
-            {NAV.map(({ to, label, icon: Icon, end }) => (
-              <NavLink key={label} to={to ? `${base}/${to}` : base} end={end} className={linkClass}>
-                <Icon className="h-4 w-4" aria-hidden />
-                {label}
-              </NavLink>
-            ))}
-          </nav>
-          <div className="lg:hidden">
-            <Dropdown
-              className="w-60 p-2"
-              trigger={({ toggle: t, open }) => (
-                <button
-                  type="button"
-                  onClick={t}
-                  aria-expanded={open}
-                  aria-label="Ouvrir le menu"
-                  className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                >
-                  <Menu className="h-5 w-5" />
-                </button>
-              )}
-            >
-              {(close) => (
-                <nav aria-label="Navigation principale" className="flex flex-col gap-1">
-                  {NAV.map(({ to, label, icon: Icon, end }) => (
-                    <NavLink key={label} to={to ? `${base}/${to}` : base} end={end} onClick={close} className={linkClass}>
-                      <Icon className="h-4 w-4" aria-hidden />
-                      {label}
-                    </NavLink>
-                  ))}
-                </nav>
-              )}
-            </Dropdown>
-          </div>
         </div>
       </div>
     </header>

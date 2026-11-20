@@ -5,6 +5,7 @@ import {
   addNotes,
   deleteNote,
   proposeChange,
+  rewriteReasonToBiff,
   saveGeneratedSchedule,
   subscribeDays,
   subscribeNotes,
@@ -106,6 +107,13 @@ export function useScheduleActions() {
     act: useCallback(
       (request: ChangeRequest, input: ActOnRequestInput) => actOnChangeRequest(atome, request, requireParent(), input),
       [atome, requireParent],
+    ),
+    prepareBiffRejection: useCallback(
+      (rawReason: string): Promise<string> => {
+        requireParent()
+        return rewriteReasonToBiff(rawReason)
+      },
+      [requireParent],
     ),
     addNote: useCallback(
       (dates: IsoDate[], text: string) => {

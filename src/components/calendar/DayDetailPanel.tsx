@@ -22,7 +22,7 @@ interface Props {
 
 /** Détail d'un jour : garde par enfant, infos calendaires, notes et demandes en cours. */
 export function DayDetailPanel({ date, info, assignments, notes, requests, highlightedRequestId, onAddNote, onDeleteNote }: Props) {
-  const { protons, role } = useAtome()
+  const { atome, protons, role } = useAtome()
   const { user } = useAuth()
 
   return (
@@ -52,7 +52,9 @@ export function DayDetailPanel({ date, info, assignments, notes, requests, highl
                 {p.firstName}
               </span>
               {h ? (
-                <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', HOUSEHOLD_STYLES[h].cell)}>{HOUSEHOLD_STYLES[h].label}</span>
+                <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', HOUSEHOLD_STYLES[h].cell)}>
+                  {atome.households[h].label || HOUSEHOLD_STYLES[h].label}
+                </span>
               ) : (
                 <span className="text-xs text-slate-400">Non planifié</span>
               )}

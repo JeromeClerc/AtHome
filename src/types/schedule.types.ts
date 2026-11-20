@@ -38,6 +38,18 @@ export interface GeneratorOptions {
   protonIds: string[]
   /** Applique la règle des ponts fériés (défaut : true). */
   applyHolidayBridges?: boolean
+  /**
+   * Applique la règle d'alternance par blocs sur les fêtes majeures :
+   * Noël / Nouvel An (2 blocs sur les vacances scolaires vaudoises de fin d'année)
+   * et Pâques (week-end/bloc de Pâques), avec alternance automatique années paires / impaires.
+   */
+  applyHolidayBlocks?: boolean
+  /**
+   * Foyer « Parent A » accueillant les enfants sur le Bloc 1 (Noël) et Pâques lors des années paires
+   * (le Bloc 2 Nouvel An allant au Parent B, avec inversion automatique les années impaires).
+   * Défaut : `'electron'`.
+   */
+  evenYearHolidayHousehold?: Household
 }
 
 export type ChangeRequestStatus =

@@ -1,4 +1,4 @@
-import { getVaudPublicHolidays } from '@/config/vaudCalendar'
+import { getEasterHolidayBlock, getVaudPublicHolidays, getWinterHolidayBlocks } from '@/config/vaudCalendar'
 import type { AlternancePattern, GeneratorOptions, Household, IsoDate, ScheduleMap } from '@/types'
 import { addIsoDays, eachIsoDate, fromIsoDate, isoWeekday } from './dates'
 
@@ -96,10 +96,71 @@ export function applyHolidayBridges(days: Map<IsoDate, Household>): IsoDate[] {
 }
 
 /**
+ * Détermine quel foyer accueille les enfants sur chacun des blocs de fêtes (Noël, Nouvel An, Pâques)
+ * pour une année donnée :
+ * - Années paires : Bloc 1 (Noël) et Pâques → Parent A (`evenYearHousehold`), Bloc 2 (Nouvel An) → Parent B.
+ * - Années impaires : inversion automatique (Bloc 1 Noël et Pâques → Parent B, Bloc 2 Nouvel An → Parent A).
+ */
+export function getHolidayBlockHouseholds(
+  year: number,
+  evenYearHousehold: Household = 'electron',
+): { christmas: Household; newYear: Household; easter: Household } {
+  const parentA = evenYearHousehold
+  const parentB = other(evenYearHousehold)
+  const isEvenYear = year % 2 === 0
+  return {
+    christmas: isEvenYear ? parentA : parentB,
+    newYear: isEvenYear ? parentB : parentA,
+    easter: isEvenYear ? parentA : parentB,
+  }
+}
+
+/**
+ * Applique la règle d'alternance par blocs pour les fêtes de fin d'année (Noël / Nouvel An découpés
+ * en 2 blocs sur les vacances scolaires vaudoises d'hiver) et le bloc de Pâques (Vendredi saint → Lundi de Pâques),
+ * avec alternance automatique années paires / années impaires.
+ *
+ * @param days Planning (date → foyer) d'un enfant, modifié en place.
+ * @param evenYearHousehold Foyer « Parent A » (Noël & Pâques les années paires ; Nouvel An les années impaires).
+ * @returns Les dates réattribuées.
+ */
+export function applyHolidayBlocks(days: Map<IsoDate, Household>, evenYearHousehold: Household = 'electron'): IsoDate[] {
+  if (days.size === 0) return []
+  const dates = [...days.keys()].sort()
+  const first = dates[0] as IsoDate
+  const last = dates[dates.length - 1] as IsoDate
+  const startYear = fromIsoDate(first).getFullYear()
+  const endYear = fromIsoDate(last).getFullYear()
+
+  const changed = new Set<IsoDate>()
+  const assignBlock = (blockDates: IsoDate[], owner: Household) => {
+    for (const d of blockDates) {
+      if (days.has(d) && days.get(d) !== owner) {
+        days.set(d, owner)
+        changed.add(d)
+      }
+    }
+  }
+
+  for (let y = startYear - 1; y <= endYear; y += 1) {
+    const owners = getHolidayBlockHouseholds(y, evenYearHousehold)
+    const easterBlock = getEasterHolidayBlock(y)
+    assignBlock(easterBlock.dates, owners.easter)
+
+    const winterBlocks = getWinterHolidayBlocks(y)
+    assignBlock(winterBlocks.christmasBlock.dates, owners.christmas)
+    assignBlock(winterBlocks.newYearBlock.dates, owners.newYear)
+  }
+
+  return [...changed].sort()
+}
+
+/**
  * Génère automatiquement un planning d'alternance pour une période et une liste d'enfants.
  *
  * Le cycle démarre au `startDate` avec `firstHousehold`. La règle des ponts fériés est appliquée
- * par défaut. Pour calculer le parent du week-end adjacent à un férié en bord de période, le cycle
+ * par défaut, suivie optionnellement par la règle des blocs de fêtes (Noël / Nouvel An / Pâques).
+ * Pour calculer le parent du week-end adjacent à un férié en bord de période, le cycle
  * est étendu d'un jour de chaque côté (sans être retourné).
  *
  * @returns Planning `date → (protonId → foyer)`.
@@ -117,6 +178,7 @@ export function generateSchedule(options: GeneratorOptions): ScheduleMap {
   const perChild = new Map<IsoDate, Household>()
   eachIsoDate(extendedStart, extendedEnd).forEach((d, i) => perChild.set(d, at(i - 1)))
   if (options.applyHolidayBridges !== false) applyHolidayBridges(perChild)
+  if (options.applyHolidayBlocks) applyHolidayBlocks(perChild, options.evenYearHolidayHousehold ?? 'electron')
 
   const result: ScheduleMap = {}
   for (const d of eachIsoDate(startDate, endDate)) {

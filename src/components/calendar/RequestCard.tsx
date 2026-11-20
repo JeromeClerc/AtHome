@@ -1,4 +1,4 @@
-import { Ban, Check, ChevronDown, Pencil, X } from 'lucide-react'
+import { Ban, Check, ChevronDown, Pencil, RefreshCw, ShieldCheck, Sparkles, X } from 'lucide-react'
 import { useState } from 'react'
 import { Alert, Badge, Button, Modal, Textarea } from '@/components/ui'
 import { HOUSEHOLD_STYLES } from '@/config/theme'
@@ -21,14 +21,18 @@ const STATUS_BADGE: Record<ChangeRequestStatus, string> = {
 
 /**
  * Carte d'une demande de modification : résumé, historique, et actions possibles pour l'utilisateur
- * (approuver, contre-proposer, rejeter avec motif, réviser, annuler) selon la machine à états.
+ * (approuver, contre-proposer, rejeter avec motif filtré via le sas BIFF, réviser, annuler) selon la machine à états.
  */
 export function RequestCard({ request, highlighted = false }: { request: ChangeRequest; highlighted?: boolean }) {
-  const { protons, household } = useAtome()
-  const { act } = useScheduleActions()
+  const { atome, protons, household } = useAtome()
+  const { act, prepareBiffRejection } = useScheduleActions()
   const [modalMode, setModalMode] = useState<ChangeRequestMode | null>(null)
   const [rejecting, setRejecting] = useState(false)
-  const [reason, setReason] = useState('')
+  /** Brouillon brut saisi librement par le parent — uniquement conservé en état local, jamais persisté dans Firestore. */
+  const [rawReason, setRawReason] = useState('')
+  /** Version reformulée par Gemini selon la méthode BIFF (seule version autorisée à être envoyée). */
+  const [biffProposal, setBiffProposal] = useState<string | null>(null)
+  const [rewriting, setRewriting] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
@@ -49,6 +53,27 @@ export function RequestCard({ request, highlighted = false }: { request: ChangeR
     }
   }
 
+  const closeRejectModal = () => {
+    setRejecting(false)
+    setRawReason('')
+    setBiffProposal(null)
+    setError(null)
+  }
+
+  const handlePrepareBiff = async () => {
+    if (!rawReason.trim()) return
+    setRewriting(true)
+    setError(null)
+    try {
+      const proposal = await prepareBiffRejection(rawReason)
+      setBiffProposal(proposal)
+    } catch (e) {
+      setError(toFrenchError(e))
+    } finally {
+      setRewriting(false)
+    }
+  }
+
   return (
     <article
       className={cn(
@@ -65,7 +90,7 @@ export function RequestCard({ request, highlighted = false }: { request: ChangeR
       <p className="text-slate-600 dark:text-slate-400">
         {names} →{' '}
         <span className={cn('font-semibold', HOUSEHOLD_STYLES[request.targetHousehold].text)}>
-          {HOUSEHOLD_STYLES[request.targetHousehold].label}
+          {atome.households[request.targetHousehold].label || HOUSEHOLD_STYLES[request.targetHousehold].label}
         </span>
       </p>
       {request.comment && <p className="mt-1 italic text-slate-600 dark:text-slate-400">« {request.comment} »</p>}
@@ -141,46 +166,82 @@ export function RequestCard({ request, highlighted = false }: { request: ChangeR
 
       <Modal
         open={rejecting}
-        onClose={() => setRejecting(false)}
+        onClose={closeRejectModal}
         title="Rejeter la demande"
         description={formatDateRanges(request.dates)}
-        size="sm"
+        size="md"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setRejecting(false)}>
+            <Button variant="secondary" onClick={closeRejectModal} disabled={busy || rewriting}>
               Retour
             </Button>
-            <Button
-              variant="danger"
-              loading={busy}
-              disabled={!reason.trim()}
-              onClick={() =>
-                run(async () => {
-                  await act(request, { action: 'reject', reason })
-                  setRejecting(false)
-                  setReason('')
-                })
-              }
-            >
-              Confirmer le rejet
-            </Button>
+            {!biffProposal ? (
+              <Button
+                icon={<Sparkles className="h-4 w-4" />}
+                loading={rewriting}
+                disabled={!rawReason.trim() || busy}
+                onClick={() => void handlePrepareBiff()}
+              >
+                Préparer le refus
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="secondary"
+                  icon={<RefreshCw className="h-4 w-4" />}
+                  loading={rewriting}
+                  disabled={!rawReason.trim() || busy}
+                  onClick={() => void handlePrepareBiff()}
+                >
+                  Régénérer
+                </Button>
+                <Button
+                  variant="danger"
+                  loading={busy}
+                  disabled={rewriting || !biffProposal.trim()}
+                  onClick={() =>
+                    run(async () => {
+                      await act(request, { action: 'reject', reason: biffProposal })
+                      closeRejectModal()
+                    })
+                  }
+                >
+                  Valider et envoyer le refus
+                </Button>
+              </>
+            )}
           </>
         }
       >
-        <Textarea
-          label="Motif du rejet"
-          required
-          value={reason}
-          maxLength={500}
-          onChange={(e) => setReason(e.target.value)}
-          hint="Obligatoire : l'autre parent sera notifié et pourra réviser sa proposition."
-          placeholder="Ex. : Je suis en déplacement professionnel ce week-end-là."
-        />
-        {error && (
-          <Alert tone="error" className="mt-2">
-            {error}
-          </Alert>
-        )}
+        <div className="space-y-4">
+          <Textarea
+            label="Votre motif (brouillon privé)"
+            required
+            value={rawReason}
+            maxLength={1000}
+            onChange={(e) => {
+              setRawReason(e.target.value)
+              setBiffProposal(null)
+            }}
+            hint="Saisissez librement votre raison : ce brouillon reste strictement local et sera reformulé de manière factuelle et apaisée (méthode BIFF) avant tout envoi."
+            placeholder="Ex. : Nous avons déjà réservé un week-end en montagne à ces dates."
+          />
+
+          {biffProposal && (
+            <div className="rounded-xl border border-brand-200 bg-brand-50/70 p-3.5 dark:border-brand-900/60 dark:bg-brand-950/40">
+              <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-brand-700 dark:text-brand-300">
+                <ShieldCheck className="h-4 w-4 shrink-0" />
+                <span>Proposition reformulée (méthode BIFF)</span>
+              </div>
+              <p className="text-sm leading-relaxed text-slate-800 dark:text-slate-100">{biffProposal}</p>
+              <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                Seul ce message reformulé sera enregistré et transmis en notification à l&apos;autre parent.
+              </p>
+            </div>
+          )}
+
+          {error && <Alert tone="error">{error}</Alert>}
+        </div>
       </Modal>
     </article>
   )

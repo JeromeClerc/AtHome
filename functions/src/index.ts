@@ -5,10 +5,13 @@
  *   d'invitation. Seul point d'entrée pour ajouter un membre (les règles l'interdisent aux clients).
  * - onNotificationCreated (trigger) : relaie chaque notification in-app en notification push sur le
  *   téléphone du destinataire via Firebase Cloud Messaging (numéro vérifié par Firebase Auth requis).
+ * - rewriteToBiff (callable) : reformule un motif de refus de modification de planning selon la
+ *   méthode BIFF (Brief, Informative, Friendly, Firm) via Gemini (`gemini-2.5-flash`).
  *
- * Aucune extension Firebase ni service tiers : l'e-mail d'invitation est envoyé côté client par
- * Firebase Authentication (lien de connexion par e-mail), les notifications par Cloud Messaging.
+ * Aucune extension Firebase ni service tiers de messagerie : l'e-mail d'invitation est envoyé côté
+ * client par Firebase Authentication (lien de connexion par e-mail), les notifications par Cloud Messaging.
  */
+import { GoogleGenAI } from '@google/genai'
 import { initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { FieldValue, getFirestore, Timestamp } from 'firebase-admin/firestore'
@@ -16,13 +19,14 @@ import { getMessaging } from 'firebase-admin/messaging'
 import { setGlobalOptions } from 'firebase-functions/v2'
 import { onDocumentCreated } from 'firebase-functions/v2/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import { defineString } from 'firebase-functions/params'
+import { defineSecret, defineString } from 'firebase-functions/params'
 import { logger } from 'firebase-functions'
 
 initializeApp()
 const db = getFirestore()
 
 const APP_URL = defineString('APP_URL', { description: "URL publique de l'application, sans slash final" })
+const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY')
 
 setGlobalOptions({ region: process.env.FUNCTIONS_REGION || 'europe-west6', maxInstances: 10 })
 
@@ -166,3 +170,55 @@ export const onNotificationCreated = onDocumentCreated('atomes/{atomeId}/notific
   await Promise.all(stale.map((t) => db.doc(`users/${uid}/fcmTokens/${t}`).delete()))
   logger.info('Notification push envoyée', { atomeId: event.params.atomeId, success: response.successCount, failures: response.failureCount, cleaned: stale.length })
 })
+
+// ─── Sas de reformulation BIFF (Gemini API) ─────────────────────────────────
+
+export const BIFF_SYSTEM_PROMPT =
+  "Tu es un médiateur familial spécialisé dans la méthode BIFF (Brief, Informative, Friendly, Firm). Reformule le motif de refus d'un parent concernant une demande de modification de planning de garde alternée. Règles strictes : 1) Supprime toute attaque personnelle, reproche, sarcasme, jugement ou référence au passé. 2) Conserve uniquement le fait objectif (indisponibilité, engagement déjà pris, contrainte logistique ou maintien du calendrier convenu). 3) Adopte un ton poli, calme, neutre et ferme (2 à 3 phrases maximum). 4) Ne pose aucune question ouverte qui relancerait une discussion. 5) Réponds uniquement avec le texte reformulé, prêt à être envoyé, sans commentaire ni guillemets."
+
+/**
+ * Reformule un motif de refus brut selon la méthode BIFF via `gemini-2.5-flash` (SDK `@google/genai`).
+ * Le texte brut n'est jamais enregistré dans Firestore : seule la proposition validée par le parent
+ * après passage dans ce sas est transmise à `actOnChangeRequest`.
+ */
+export const rewriteToBiff = onCall<{ rawReason?: string }>(
+  { secrets: [GEMINI_API_KEY] },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Connectez-vous pour préparer ce refus.')
+    }
+    const rawReason = typeof request.data?.rawReason === 'string' ? request.data.rawReason.trim() : ''
+    if (!rawReason) {
+      throw new HttpsError('invalid-argument', 'Veuillez saisir un motif de refus à reformuler.')
+    }
+    if (rawReason.length > 1000) {
+      throw new HttpsError('invalid-argument', 'Le motif brut ne peut pas dépasser 1000 caractères.')
+    }
+
+    const apiKey = GEMINI_API_KEY.value() || process.env.GEMINI_API_KEY
+    if (!apiKey) {
+      throw new HttpsError('failed-precondition', 'Le secret GEMINI_API_KEY n’est pas configuré.')
+    }
+
+    try {
+      const ai = new GoogleGenAI({ apiKey })
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: rawReason,
+        config: {
+          systemInstruction: BIFF_SYSTEM_PROMPT,
+        },
+      })
+      const biffText = response.text?.trim().replace(/^["«\s]+|["»\s]+$/g, '').trim() ?? ''
+      if (!biffText) {
+        throw new HttpsError('internal', 'La reformulation BIFF a renvoyé une réponse vide.')
+      }
+      logger.info('Motif de refus reformulé via BIFF', { uid: request.auth.uid })
+      return { biffText }
+    } catch (error) {
+      if (error instanceof HttpsError) throw error
+      logger.error('Échec de la reformulation BIFF Gemini', error)
+      throw new HttpsError('internal', 'Impossible de préparer la reformulation BIFF pour le moment.')
+    }
+  },
+)

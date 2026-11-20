@@ -14,8 +14,9 @@ import { buildCycle, generateSchedule, parseCustomCycle, PATTERN_LABELS } from '
 import { computeStats, percent } from '@/utils/stats'
 
 /**
- * Générateur du planning d'alternance. Crée uniquement les jours non encore planifiés :
- * le planning existant n'est jamais écrasé (toute modification passe par une demande validée).
+ * Générateur du planning d'alternance. Crée les jours non planifiés et recalcule les jours
+ * générés automatiquement (`lastChangeRequestId == null`), tout en préservant les jours modifiés
+ * manuellement (échanges validés) ainsi que les demandes de modification en cours.
  */
 export function ScheduleGenerator() {
   const { protons, atome } = useAtome()
@@ -27,6 +28,8 @@ export function ScheduleGenerator() {
   const [first, setFirst] = useState<Household>('electron')
   const [custom, setCustom] = useState('E E E E E E E P P P P P P P')
   const [bridges, setBridges] = useState(true)
+  const [holidayBlocks, setHolidayBlocks] = useState(true)
+  const [evenYearHousehold, setEvenYearHousehold] = useState<Household>('electron')
   const [selected, setSelected] = useState<string[] | null>(null)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
@@ -38,13 +41,23 @@ export function ScheduleGenerator() {
       if (protonIds.length === 0) return { error: 'Sélectionnez au moins un enfant.' }
       const customCycle = pattern === 'custom' ? parseCustomCycle(custom) : undefined
       const cycle = buildCycle(pattern, first, customCycle)
-      const schedule = generateSchedule({ startDate, endDate, pattern, firstHousehold: first, customCycle, protonIds, applyHolidayBridges: bridges })
+      const schedule = generateSchedule({
+        startDate,
+        endDate,
+        pattern,
+        firstHousehold: first,
+        customCycle,
+        protonIds,
+        applyHolidayBridges: bridges,
+        applyHolidayBlocks: holidayBlocks,
+        evenYearHolidayHousehold: evenYearHousehold,
+      })
       const stats = computeStats(schedule, startDate, endDate, protonIds[0])
       return { schedule, stats, cycle }
     } catch (e) {
       return { error: toFrenchError(e) }
     }
-  }, [startDate, endDate, pattern, first, custom, bridges, protonIds])
+  }, [startDate, endDate, pattern, first, custom, bridges, holidayBlocks, evenYearHousehold, protonIds])
 
   const save = async () => {
     if (!('schedule' in preview) || !preview.schedule) return
@@ -54,7 +67,7 @@ export function ScheduleGenerator() {
       const r = await saveGenerated(preview.schedule)
       setMessage({
         tone: 'success',
-        text: `Planning enregistré : ${r.created} jour(s) créé(s), ${r.completed} complété(s), ${r.skipped} déjà planifié(s) inchangé(s).`,
+        text: `Planning enregistré : ${r.created} jour(s) créé(s), ${r.updated} recalculé(s), ${r.completed} complété(s), ${r.preserved} échange(s) validé(s) préservé(s).`,
       })
     } catch (e) {
       setMessage({ tone: 'error', text: toFrenchError(e) })
@@ -67,7 +80,7 @@ export function ScheduleGenerator() {
     <Card>
       <CardHeader
         title="Générer le planning d'alternance"
-        description="Les jours déjà planifiés ne sont jamais modifiés : pour les changer, passez par une demande de modification."
+        description="Recalcule le planning automatique tout en préservant les jours modifiés manuellement (échanges validés) ainsi que les demandes de modification en cours."
       />
       <div className="grid gap-4 p-5 sm:grid-cols-2">
         <Select label="Modèle d'alternance" value={pattern} onChange={(e) => setPattern(e.target.value as AlternancePattern)} hint={PATTERN_LABELS[pattern].description}>
@@ -121,6 +134,30 @@ export function ScheduleGenerator() {
           checked={bridges}
           onChange={(e) => setBridges(e.target.checked)}
         />
+        <Checkbox
+          className="sm:col-span-2"
+          label="Alterner par blocs les fêtes de fin d'année (Noël / Nouvel An en 2 blocs sur les vacances d'hiver vaudoises) et Pâques selon les années paires / impaires"
+          checked={holidayBlocks}
+          onChange={(e) => setHolidayBlocks(e.target.checked)}
+        />
+        {holidayBlocks && (
+          <Select
+            wrapperClassName="sm:col-span-2"
+            label="Attribution années paires (Parent A / Parent B)"
+            value={evenYearHousehold}
+            onChange={(e) => setEvenYearHousehold(e.target.value as Household)}
+            hint="Années impaires : inversion automatique (Bloc 1 Noël & Pâques au Parent B, Bloc 2 Nouvel An au Parent A)."
+          >
+            <option value="electron">
+              Années paires : Noël (Bloc 1) &amp; Pâques → {HOUSEHOLD_STYLES.electron.label} ({atome.households.electron.label}) · Nouvel An (Bloc 2) →{' '}
+              {HOUSEHOLD_STYLES.positron.label} ({atome.households.positron.label})
+            </option>
+            <option value="positron">
+              Années paires : Noël (Bloc 1) &amp; Pâques → {HOUSEHOLD_STYLES.positron.label} ({atome.households.positron.label}) · Nouvel An (Bloc 2) →{' '}
+              {HOUSEHOLD_STYLES.electron.label} ({atome.households.electron.label})
+            </option>
+          </Select>
+        )}
       </div>
 
       <div className="border-t border-slate-200 p-5 dark:border-slate-800">

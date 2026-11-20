@@ -10,7 +10,8 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore'
-import { db } from '@/config/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/config/firebase'
 import type {
   Atome,
   AtomeRole,
@@ -68,26 +69,36 @@ export function subscribeDays(
 }
 
 export interface GenerationReport {
+  /** Jours nouvellement créés. */
   created: number
+  /** Jours automatiques existants recalculés suite au changement de paramètres. */
+  updated: number
+  /** Jours existants auxquels un enfant non encore planifié a été ajouté. */
   completed: number
+  /** Jours automatiques déjà identiques au nouveau calcul (aucune écriture requise). */
   skipped: number
+  /** Jours issus d'une modification manuelle validée (lastChangeRequestId != null), strictement préservés. */
+  preserved: number
 }
 
 /**
- * Enregistre un planning généré **sans jamais écraser** l'existant :
- * - jour inexistant → créé ;
- * - jour existant → seuls les enfants sans attribution sont ajoutés ;
- * - attribution existante → ignorée (toute modification passe par une demande validée).
+ * Enregistre ou régénère un planning automatique :
+ * - jour inexistant → créé (`lastChangeRequestId: null`) ;
+ * - jour existant généré automatiquement (`lastChangeRequestId == null`) → mis à jour si le nouveau
+ *   calcul modifie l'attribution ;
+ * - jour ayant fait l'objet d'une modification manuelle validée (`lastChangeRequestId != null`) →
+ *   **strictement préservé** (seuls d'éventuels nouveaux enfants sans attribution y sont complétés) ;
+ * - les demandes de modification en cours (`atomes/{id}/changeRequests`) ne sont jamais touchées.
  */
 export async function saveGeneratedSchedule(atomeId: string, schedule: ScheduleMap): Promise<GenerationReport> {
   const dates = Object.keys(schedule).sort()
-  if (dates.length === 0) return { created: 0, completed: 0, skipped: 0 }
+  if (dates.length === 0) return { created: 0, updated: 0, completed: 0, skipped: 0, preserved: 0 }
   const existingSnap = await getDocs(
     query(daysOf(atomeId), where('date', '>=', dates[0]), where('date', '<=', dates[dates.length - 1])),
   )
   const existing = new Map<IsoDate, CustodyDay>(existingSnap.docs.map((d) => [d.id, d.data() as CustodyDay]))
 
-  const report: GenerationReport = { created: 0, completed: 0, skipped: 0 }
+  const report: GenerationReport = { created: 0, updated: 0, completed: 0, skipped: 0, preserved: 0 }
   let batch = writeBatch(db)
   let ops = 0
   for (const date of dates) {
@@ -96,16 +107,36 @@ export async function saveGeneratedSchedule(atomeId: string, schedule: ScheduleM
     if (!current) {
       batch.set(doc(daysOf(atomeId), date), { date, assignments, lastChangeRequestId: null, updatedAt: serverTimestamp() })
       report.created += 1
-    } else {
+    } else if (current.lastChangeRequestId) {
+      // Jour modifié manuellement et validé : on ne touche jamais aux attributions existantes.
       const missing = Object.entries(assignments).filter(([pid]) => !(pid in current.assignments))
       if (missing.length === 0) {
+        report.preserved += 1
+        continue
+      }
+      const nextAssignments: Record<string, Household> = { ...current.assignments }
+      for (const [pid, h] of missing) nextAssignments[pid] = h
+      batch.update(doc(daysOf(atomeId), date), { assignments: nextAssignments, updatedAt: serverTimestamp() })
+      report.completed += 1
+      report.preserved += 1
+    } else {
+      // Jour purement automatique (lastChangeRequestId == null) : peut être recalculé.
+      const hasNewChild = Object.keys(assignments).some((pid) => !(pid in current.assignments))
+      const hasChangedChild = Object.entries(assignments).some(
+        ([pid, h]) => pid in current.assignments && current.assignments[pid] !== h,
+      )
+      if (!hasNewChild && !hasChangedChild) {
         report.skipped += 1
         continue
       }
-      const patch: Record<string, unknown> = {}
-      for (const [pid, h] of missing) patch[`assignments.${pid}`] = h
-      batch.update(doc(daysOf(atomeId), date), patch)
-      report.completed += 1
+      const nextAssignments: Record<string, Household> = { ...current.assignments, ...assignments }
+      batch.update(doc(daysOf(atomeId), date), {
+        assignments: nextAssignments,
+        lastChangeRequestId: null,
+        updatedAt: serverTimestamp(),
+      })
+      if (hasChangedChild) report.updated += 1
+      else report.completed += 1
     }
     ops += 1
     if (ops >= BATCH_LIMIT) {
@@ -224,8 +255,23 @@ export interface ActOnRequestInput {
   action: Exclude<ChangeRequestAction, 'propose'>
   /** Nouvelle version (contre-proposition ou révision). */
   draft?: ChangeRequestDraft
-  /** Motif obligatoire pour un rejet. */
+  /** Motif obligatoire pour un rejet (version validée issue du sas BIFF). */
   reason?: string
+}
+
+/**
+ * Appelle la Cloud Function sécurisée `rewriteToBiff` pour reformuler un motif de refus brut
+ * selon la méthode BIFF (Brief, Informative, Friendly, Firm) via Gemini.
+ * Le brouillon brut n'est jamais sauvegardé dans Firestore.
+ */
+export async function rewriteReasonToBiff(rawReason: string): Promise<string> {
+  const clean = rawReason.trim()
+  if (!clean) throw new Error('Veuillez saisir un motif de refus.')
+  const call = httpsCallable<{ rawReason: string }, { biffText: string }>(functions, 'rewriteToBiff')
+  const res = await call({ rawReason: clean })
+  const text = res.data?.biffText?.trim()
+  if (!text) throw new Error('La reformulation BIFF a renvoyé une réponse vide.')
+  return text
 }
 
 /**

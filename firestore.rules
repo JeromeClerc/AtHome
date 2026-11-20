@@ -164,10 +164,19 @@ service cloud.firestore {
           && isIsoDate(date)
           && request.resource.data.date == date
           && request.resource.data.assignments is map;
-        // Mise à jour : soit ajout d'enfants non encore planifiés (génération), soit demande approuvée.
+        // Mise à jour :
+        // (1) régénération d'un jour purement automatique (jamais modifié par une demande approuvée : lastChangeRequestId == null) ;
+        // (2) ajout d'enfants non encore planifiés sur un jour existant sans modifier les attributions validées ;
+        // (3) application d'une demande de modification approuvée dans ce même lot (approvedInThisBatch).
         allow update: if isParent(atomeId) && unchanged('date') && (
           (
-            changedOnly(['assignments'])
+            resource.data.lastChangeRequestId == null
+            && request.resource.data.lastChangeRequestId == null
+            && changedOnly(['assignments', 'lastChangeRequestId', 'updatedAt'])
+            && request.resource.data.assignments is map
+          ) || (
+            unchanged('lastChangeRequestId')
+            && changedOnly(['assignments', 'updatedAt'])
             && request.resource.data.assignments.diff(resource.data.assignments).changedKeys().size() == 0
             && request.resource.data.assignments.diff(resource.data.assignments).removedKeys().size() == 0
           ) || (

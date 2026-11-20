@@ -58,23 +58,36 @@ atomes/{atomeId}/notifications/{id}  AppNotification (recipientUid, type, read�
 Les dates « jour » sont **toujours** des chaînes ISO `yyyy-MM-dd` (pas de fuseau). Affichage `dd.MM.yyyy`.
 
 ## Règles métier clés
-1. **Aucune modification de garde directe.** Les jours (`days`) existants ne peuvent être modifiés que via une
-   `ChangeRequest` passée à `approved` par l'*autre* parent (vérifié dans `firestore.rules` avec `getAfter`).
-   La génération initiale ne fait que **créer** des jours inexistants.
+1. **Aucune modification de garde manuelle directe.** Toute modification ponctuelle d'un jour existant passe par une
+   `ChangeRequest` passée à `approved` par l'*autre* parent (vérifié dans `firestore.rules` avec `getAfter`), ce qui
+   verrouille le jour avec `lastChangeRequestId`. Lors d'une régénération du planning automatique (`saveGeneratedSchedule`),
+   seuls les jours non planifiés et les jours purement automatiques (`lastChangeRequestId == null`) sont créés ou recalculés :
+   les jours modifiés manuellement et validés (`lastChangeRequestId != null`) ainsi que les demandes de modification en cours
+   (`changeRequests`) sont **strictement préservés**.
 2. **Machine à états ChangeRequest** (`src/utils/changeRequestMachine.ts`) :
    `pending` → `approved` | `counter_proposed` | `rejected` ; `counter_proposed` → idem (ping-pong) ;
-   `rejected` → `pending` (le demandeur révise) | `cancelled`. Le rejet exige un motif écrit.
+   `rejected` → `pending` (le demandeur révise) | `cancelled`. Le rejet exige un motif écrit, qui passe
+   obligatoirement par le **sas de reformulation BIFF** (`rewriteToBiff` via Gemini `gemini-2.5-flash`) :
+   le brouillon brut reste en état local React et seule la version BIFF validée est sauvegardée dans Firestore.
    `awaitingHousehold` = foyer qui doit agir ; seul celui-ci peut approuver/contre-proposer/rejeter.
 3. **Jours fériés vaudois** (`src/config/vaudCalendar.ts`) : 1er janv., 2 janv., Vendredi saint, Lundi de Pâques,
    Ascension, Lundi de Pentecôte, 1er août, Lundi du Jeûne fédéral, Noël. Calculés (algorithme de Pâques).
 4. **Règle des ponts** (`src/utils/scheduleGenerator.ts`) : un bloc de jours fériés qui touche un week-end
    (finit un vendredi / commence un lundi) est attribué au parent qui a le week-end adjacent.
-5. **Vacances scolaires vaudoises** : table officielle par année scolaire + heuristique de repli pour les
+5. **Règle des fêtes par blocs & statistiques des fêtes majeures** (`getWinterHolidayBlocks`, `getEasterHolidayBlock`,
+   `applyHolidayBlocks`, `computeMajorHolidays`) :
+   - Découpage des vacances scolaires vaudoises de fin d'année en 2 blocs : Bloc 1 (Noël, incluant 24 et 25 déc.)
+     et Bloc 2 (Nouvel An, incluant 31 déc. et 1er janv.), + bloc de Pâques (Vendredi saint → Lundi de Pâques).
+   - Alternance automatique années paires (Bloc 1 Noël & Pâques → Parent A, Bloc 2 Nouvel An → Parent B) /
+     années impaires (inversion automatique), avec option d'inversion A/B dans le générateur.
+   - Bandeau **« Fêtes majeures »** sur le Dashboard (`StatsBar.tsx`) limité aux 3 jalons : Pâques (dimanche de Pâques),
+     Noël (25 décembre) et Nouvel An (1er janvier) selon le planning actif.
+6. **Vacances scolaires vaudoises** : table officielle par année scolaire + heuristique de repli pour les
    années non saisies (à mettre à jour chaque année depuis vd.ch).
-6. **Majorité** (`src/utils/age.ts`) : dès 18 ans révolus, la fiche d'un proton est en lecture seule pour les
+7. **Majorité** (`src/utils/age.ts`) : dès 18 ans révolus, la fiche d'un proton est en lecture seule pour les
    parents ; seul le proton lié (`linkedUid`) peut l'éditer.
-7. **Neutrons** : lecture seule stricte (UI + rules).
-8. Notes : couleur selon le rôle de l'auteur (électron, positron, proton, neutron).
+8. **Neutrons** : lecture seule stricte (UI + rules).
+9. Notes : couleur selon le rôle de l'auteur (électron, positron, proton, neutron).
 
 ## Routes
 | Route | Page | Accès |
@@ -84,6 +97,7 @@ Les dates « jour » sont **toujours** des chaînes ISO `yyyy-MM-dd` (pas de fus
 | `/` | choix / redirection vers l'Atome | connecté |
 | `/setup` | `SetupAtomePage` (création, e-mail vérifié requis) | connecté |
 | `/:atomeSlug` | `DashboardPage` (`?view=day|week|month|year&date=…&request=…`) | membre |
+| `/:atomeSlug/aide` | `HelpPage` (documentation complète : rôles, fonctionnalités, calculs, sas BIFF, paramétrages) | membre |
 | `/:atomeSlug/enfants` | `ProtonsPage` | membre |
 | `/:atomeSlug/foyer` | `FoyerPage` (dans `SetupAtomePage.tsx`) : foyers, invitations, générateur | membre |
 | `/:atomeSlug/profil` | `ProfilePage` | membre |
@@ -92,6 +106,8 @@ Les dates « jour » sont **toujours** des chaînes ISO `yyyy-MM-dd` (pas de fus
 - `acceptInvitation` (callable, région `europe-west6`) : seule voie d'ajout d'un membre.
 - `onNotificationCreated` → push FCM vers `users/{uid}/fcmTokens` si `pushOptIn` **et** numéro vérifié
   (`getAuth().getUser(uid).phoneNumber`) ; nettoie les jetons invalides.
+- `rewriteToBiff` (callable, secret `GEMINI_API_KEY`) : reformule un motif de refus de modification de planning
+  selon la méthode BIFF via `@google/genai` (`gemini-2.5-flash`).
 - L'e-mail d'invitation est envoyé **côté client** par Firebase Auth (`invitation.service.ts`).
 Les notifications in-app sont créées par le client dans le même lot que l'action qui les déclenche.
 
