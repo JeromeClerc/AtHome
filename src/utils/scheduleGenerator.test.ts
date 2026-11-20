@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { Household } from '@/types'
-import { applyHolidayBlocks, applyHolidayBridges, buildCycle, generateSchedule, getHolidayBlockHouseholds, parseCustomCycle } from './scheduleGenerator'
+import {
+  applyHolidayBlocks,
+  applyHolidayBridges,
+  applySummerHolidayBlocks,
+  buildCycle,
+  generateSchedule,
+  getHolidayBlockHouseholds,
+  parseCustomCycle,
+} from './scheduleGenerator'
 import { eachIsoDate } from './dates'
 
 const P = ['p1']
@@ -192,5 +200,55 @@ describe('applyHolidayBlocks & alternance années paires / impaires', () => {
     for (const d of eachIsoDate('2026-04-03', '2026-04-06')) days.set(d, 'positron')
     const changed = applyHolidayBlocks(days, 'electron')
     expect(changed).toEqual(['2026-04-03', '2026-04-04', '2026-04-05', '2026-04-06'])
+  })
+
+  it("Phase 2 — regroupe les vacances d'été (> 2 semaines) en 2 grands blocs sans modifier le total de jours de la Phase 1", () => {
+    const sPhase1 = generateSchedule({
+      startDate: '2026-06-01',
+      endDate: '2026-08-31',
+      pattern: 'weekly',
+      firstHousehold: 'electron',
+      protonIds: P,
+      applyHolidayBlocks: false,
+      applyHolidayBridges: false,
+    })
+    const summerDates = eachIsoDate('2026-06-27', '2026-08-16')
+    const phase1ElectronCount = summerDates.filter((d) => sPhase1[d]?.p1 === 'electron').length
+
+    const days = new Map<string, Household>()
+    for (const [d, a] of Object.entries(sPhase1)) days.set(d, a.p1 as Household)
+    applySummerHolidayBlocks(days)
+
+    const phase2ElectronCount = summerDates.filter((d) => days.get(d) === 'electron').length
+    expect(phase2ElectronCount).toBe(phase1ElectronCount)
+
+    // Vérifie qu'il n'y a qu'un seul changement de foyer sur l'ensemble des 51 jours d'été (2 grands blocs)
+    let transitions = 0
+    for (let i = 1; i < summerDates.length; i += 1) {
+      if (days.get(summerDates[i]!) !== days.get(summerDates[i - 1]!)) transitions += 1
+    }
+    expect(transitions).toBe(1)
+  })
+
+  it('Phase 4 — intervertit les 2 semaines de vacances de Pâques si la Phase 1 attribue Pâques au mauvais parent', () => {
+    // En démarrant le 2026-03-30 (lundi avant Pâques) avec positron, le dimanche de Pâques 2026-04-05 tombe sur positron
+    // alors que 2026 (année paire) doit attribuer Pâques à electron (Parent 1).
+    const s = generateSchedule({
+      startDate: '2026-03-30',
+      endDate: '2026-04-19',
+      pattern: 'weekly',
+      firstHousehold: 'positron',
+      protonIds: P,
+      applyHolidayBlocks: true,
+      evenYearHolidayHousehold: 'electron',
+    })
+    // 1re partie (Vendredi saint 03.04 → dimanche 12.04) = electron
+    expect(s['2026-04-03']?.p1).toBe('electron')
+    expect(s['2026-04-05']?.p1).toBe('electron')
+    expect(s['2026-04-06']?.p1).toBe('electron')
+    expect(s['2026-04-12']?.p1).toBe('electron')
+    // 2e semaine (lundi 13.04 → dimanche 19.04) = positron
+    expect(s['2026-04-13']?.p1).toBe('positron')
+    expect(s['2026-04-19']?.p1).toBe('positron')
   })
 })

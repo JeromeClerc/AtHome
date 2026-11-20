@@ -130,31 +130,31 @@ export function ScheduleGenerator() {
         </fieldset>
         <Checkbox
           className="sm:col-span-2"
-          label="Rattacher les jours fériés vaudois adjacents au week-end (Vendredi saint, lundis de Pâques, Pentecôte, Jeûne…) au parent du week-end"
+          label="Phase 3 — Jours fériés vaudois (Jeudi de l'Ascension + pont du vendredi, Lundi de Pentecôte, 1er août, Lundi du Jeûne fédéral)"
           checked={bridges}
           onChange={(e) => setBridges(e.target.checked)}
         />
         <Checkbox
           className="sm:col-span-2"
-          label="Alterner par blocs les fêtes de fin d'année (Noël / Nouvel An en 2 blocs sur les vacances d'hiver vaudoises) et Pâques selon les années paires / impaires"
+          label="Phases 2 & 4 — Vacances d'été en grands blocs + Fêtes majeures (Pâques, Noël 24-25.12 & Nouvel An 31.12-01.01 alternés années paires / impaires)"
           checked={holidayBlocks}
           onChange={(e) => setHolidayBlocks(e.target.checked)}
         />
         {holidayBlocks && (
           <Select
             wrapperClassName="sm:col-span-2"
-            label="Attribution années paires (Parent A / Parent B)"
+            label="Attribution années paires (Parent 1 / Parent 2)"
             value={evenYearHousehold}
             onChange={(e) => setEvenYearHousehold(e.target.value as Household)}
-            hint="Années impaires : inversion automatique (Bloc 1 Noël & Pâques au Parent B, Bloc 2 Nouvel An au Parent A)."
+            hint="Années impaires : inversion automatique (Noël 24-25.12 & Pâques au Parent 2, Nouvel An 31.12-01.01 au Parent 1)."
           >
             <option value="electron">
-              Années paires : Noël (Bloc 1) &amp; Pâques → {HOUSEHOLD_STYLES.electron.label} ({atome.households.electron.label}) · Nouvel An (Bloc 2) →{' '}
-              {HOUSEHOLD_STYLES.positron.label} ({atome.households.positron.label})
+              Années paires : Noël (24-25.12) &amp; Pâques → {atome.households.electron.label || HOUSEHOLD_STYLES.electron.label} · Nouvel An (31.12-01.01) →{' '}
+              {atome.households.positron.label || HOUSEHOLD_STYLES.positron.label}
             </option>
             <option value="positron">
-              Années paires : Noël (Bloc 1) &amp; Pâques → {HOUSEHOLD_STYLES.positron.label} ({atome.households.positron.label}) · Nouvel An (Bloc 2) →{' '}
-              {HOUSEHOLD_STYLES.electron.label} ({atome.households.electron.label})
+              Années paires : Noël (24-25.12) &amp; Pâques → {atome.households.positron.label || HOUSEHOLD_STYLES.positron.label} · Nouvel An (31.12-01.01) →{' '}
+              {atome.households.electron.label || HOUSEHOLD_STYLES.electron.label}
             </option>
           </Select>
         )}
@@ -166,7 +166,7 @@ export function ScheduleGenerator() {
         ) : (
           <div className="space-y-3">
             <div>
-              <p className="mb-1 text-xs font-medium text-slate-500">Aperçu du cycle ({preview.cycle.length} jours)</p>
+              <p className="mb-1 text-xs font-medium text-slate-500">Aperçu du cycle de base ({preview.cycle.length} jours)</p>
               <div className="flex flex-wrap gap-0.5">
                 {preview.cycle.map((h, i) => (
                   <span key={i} className={cn('flex h-6 w-6 items-center justify-center rounded text-[10px] font-bold', HOUSEHOLD_STYLES[h].solid)}>
@@ -176,13 +176,15 @@ export function ScheduleGenerator() {
               </div>
             </div>
             <p className="text-sm text-slate-600 dark:text-slate-400">
-              Sur la période ({preview.stats.all.total} jours par enfant) :{' '}
+              Sur la période ({preview.stats.all.total} jours calendaires) :{' '}
               <span className={HOUSEHOLD_STYLES.electron.text}>
-                Électron {preview.stats.all.electron} j ({percent(preview.stats.all.electron, preview.stats.all.total)}%)
+                {atome.households.electron.label || HOUSEHOLD_STYLES.electron.label} {preview.stats.all.electron} j (
+                {percent(preview.stats.all.electron, preview.stats.all.total)}%)
               </span>{' '}
               ·{' '}
               <span className={HOUSEHOLD_STYLES.positron.text}>
-                Positron {preview.stats.all.positron} j ({percent(preview.stats.all.positron, preview.stats.all.total)}%)
+                {atome.households.positron.label || HOUSEHOLD_STYLES.positron.label} {preview.stats.all.positron} j (
+                {percent(preview.stats.all.positron, preview.stats.all.total)}%)
               </span>
             </p>
           </div>

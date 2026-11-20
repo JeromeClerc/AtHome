@@ -295,120 +295,141 @@ export function HelpPage() {
       <section id="calculs" className="scroll-mt-20">
         <Card>
           <CardHeader
-            title="4. Modes de calcul du générateur & Calendrier officiel du Canton de Vaud"
-            description="Comment At Home calcule automatiquement votre planning d'alternance, les ponts fériés et les blocs de fêtes."
+            title="4. Méthode transparente de génération du planning (en 4 phases)"
+            description="Un algorithme neutre, conforme au droit suisse de la garde alternée 50/50 et conçu pour éviter tout conflit logistique entre les parents."
           />
           <div className="space-y-4 p-5 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+            <Alert tone="info">
+              <strong>Principe d&apos;équité et de neutralité :</strong> la méthode de calcul d&apos;At Home est 100 % déterministe. Aucun
+              parent ne « choisit » ses semaines à la carte lors de la génération automatique : le planning découle mathématiquement de la
+              première semaine de garde sélectionnée et applique 4 phases objectives pour répartir équitablement les semaines d&apos;école,
+              les vacances scolaires vaudoises, les jours fériés et les fêtes majeures, tout en privilégiant de <strong>grands blocs de garde</strong>{' '}
+              afin que les passages de relais s&apos;effectuent au maximum via l&apos;école.
+            </Alert>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 text-xs dark:border-slate-800 dark:bg-slate-800/30">
+              <p className="font-semibold text-slate-900 dark:text-white">
+                Principe de base du relais hebdomadaire (Semaine A / Semaine B — 50/50)
+              </p>
+              <ul className="mt-1.5 list-disc space-y-1 pl-4 text-slate-600 dark:text-slate-400">
+                <li>
+                  En période scolaire, le parent qui entame sa semaine de garde récupère les enfants <strong>le lundi à la sortie de l&apos;école</strong>,
+                  les accueille toute la semaine ainsi que le week-end, puis les dépose <strong>à l&apos;école le lundi matin suivant</strong>.
+                </li>
+                <li>
+                  Conformément aux exigences suisses en matière de garde alternée, l&apos;algorithme veille à ce que chaque parent profite
+                  d&apos;environ <strong>50 % des jours de vacances scolaires</strong>, <strong>50 % des jours fériés</strong>, et d&apos;une{' '}
+                  <strong>alternance une année sur deux sur les fêtes pivots (Pâques, Noël et Nouvel An)</strong>.
+                </li>
+                <li>
+                  <strong>Équilibre pluriannuel :</strong> l&apos;algorithme ne cherche pas à forcer artificiellement un 50,0 % / 50,0 % au
+                  jour près sur une seule année civile (ce qui obligerait à découper des week-ends ou des jours fériés). Si une année se
+                  conclut à 51 % / 49 %, l&apos;inversion automatique des fêtes et le cycle hebdomadaire produisent naturellement 49 % / 51 %
+                  l&apos;année suivante.
+                </li>
+              </ul>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
-                <h3 className="font-semibold text-slate-900 dark:text-white">4.1 Modèles de cycles d&apos;alternance</h3>
-                <p className="mt-1 text-xs text-slate-500">
-                  Le cycle démarre à la date de début choisie (conseil : un lundi) avec le foyer sélectionné :
+                <h3 className="font-semibold text-slate-900 dark:text-white">Phase 1 — Répartition de base</h3>
+                <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-400">
+                  À partir de la date de départ sélectionnée (le lundi de la 1re semaine de garde), le générateur déroule l&apos;alternance
+                  pure une semaine sur deux (lundi → dimanche), sans tenir compte à ce stade des vacances scolaires, des jours fériés ni des
+                  fêtes majeures.
                 </p>
-                <ul className="mt-2 list-disc space-y-1.5 pl-4 text-xs text-slate-600 dark:text-slate-400">
+                <p className="mt-2 text-xs text-slate-500">
+                  <em>Autres cycles disponibles si souhaité :</em> 2-2-3, 2-2-5-5, Un week-end sur deux, ou cycle personnalisé.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+                <h3 className="font-semibold text-slate-900 dark:text-white">Phase 2 — Répartition des vacances scolaires</h3>
+                <ul className="mt-1.5 list-disc space-y-1.5 pl-4 text-xs text-slate-600 dark:text-slate-400">
                   <li>
-                    <strong>Semaine A / Semaine B</strong> (cycle de 14 j) : 7 jours complets chez le foyer A, puis 7 jours chez le foyer B.
+                    <strong>Vacances de 1 jour à 1 semaine (ex. Pont de l&apos;Ascension, Relâches) :</strong> aucune modification. On suit
+                    la répartition de la Phase 1 (« ça tombe comme ça tombe », sans casser le rythme hebdomadaire).
                   </li>
                   <li>
-                    <strong>2-2-3</strong> (cycle de 14 j) : 2 j chez A (lun-mar), 2 j chez B (mer-jeu), 3 j week-end chez A (ven-dim), puis
-                    inversion la semaine suivante.
+                    <strong>Vacances de 1 à 2 semaines (ex. Vacances d&apos;automne) :</strong> aucune modification. L&apos;alternance de
+                    base une semaine sur deux attribue naturellement une semaine à chaque parent.
                   </li>
                   <li>
-                    <strong>2-2-5-5</strong> (cycle de 14 j) : lundi-mardi fixes chez A, mercredi-jeudi fixes chez B, et week-ends prolongés
-                    de 3 jours alternés.
-                  </li>
-                  <li>
-                    <strong>Un week-end sur deux</strong> (cycle de 14 j) : semaine chez le foyer principal, un week-end sur deux (sam-dim)
-                    chez le second foyer.
-                  </li>
-                  <li>
-                    <strong>Cycle personnalisé</strong> : séquence libre jour par jour saisie avec les lettres <code>E</code> (Électron) et{' '}
-                    <code>P</code> (Positron), répétée automatiquement sur toute la période.
+                    <strong>Vacances supérieures à 2 semaines (Vacances d&apos;été, ~7 semaines) :</strong> sans modifier le nombre total de
+                    jours d&apos;été attribué à chaque parent par la Phase 1, l&apos;algorithme regroupe les semaines en{' '}
+                    <strong>2 grands blocs contigus</strong> (le 1er bloc prolongeant le parent en charge à la sortie des classes fin juin,
+                    le 2nd bloc allant jusqu&apos;à la rentrée d&apos;août). Cela évite les allers-retours hebdomadaires hors période scolaire.
                   </li>
                 </ul>
               </div>
 
               <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
-                <h3 className="font-semibold text-slate-900 dark:text-white">4.2 Jours fériés vaudois &amp; règle des ponts</h3>
+                <h3 className="font-semibold text-slate-900 dark:text-white">Phase 3 — Jours fériés vaudois</h3>
                 <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                  Les <strong>9 jours fériés officiels du Canton de Vaud</strong> sont calculés automatiquement pour chaque année :{' '}
-                  <em>
-                    Nouvel An (1er janv.), Saint-Berchtold (2 janv.), Vendredi saint, Lundi de Pâques, Ascension, Lundi de Pentecôte, Fête
-                    nationale (1er août), Lundi du Jeûne fédéral (lundi suivant le 3e dimanche de septembre) et Noël (25 déc.)
-                  </em>
-                  .
+                  Pour éviter tout déplacement inutile un jour férié où il n&apos;y a pas d&apos;école :
                 </p>
-                <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-800/50">
-                  <p className="font-semibold text-slate-800 dark:text-slate-200">Règle automatique des ponts fériés :</p>
-                  <ul className="mt-1 list-disc space-y-1 pl-4 text-slate-600 dark:text-slate-400">
-                    <li>
-                      Un jour (ou bloc de jours) férié en semaine qui <strong>se termine un vendredi</strong> est attribué au parent qui a
-                      la garde le <strong>samedi suivant</strong>.
-                    </li>
-                    <li>
-                      Un jour (ou bloc de jours) férié qui <strong>commence un lundi</strong> (ex. Lundi de Pentecôte, Lundi du Jeûne
-                      fédéral) est attribué au parent qui a la garde le <strong>dimanche précédent</strong>.
-                    </li>
-                  </ul>
-                </div>
+                <ul className="mt-1.5 list-disc space-y-1.5 pl-4 text-xs text-slate-600 dark:text-slate-400">
+                  <li>
+                    <strong>Jeudi de l&apos;Ascension + pont du vendredi :</strong> attribués au parent en charge cette semaine-là.
+                  </li>
+                  <li>
+                    <strong>Lundi de Pentecôte :</strong> attribué au parent qui était en charge le week-end directement précédent (le
+                    relais se faisant à l&apos;école le mardi matin).
+                  </li>
+                  <li>
+                    <strong>1er août (Fête nationale) :</strong> attribué au parent en charge cette semaine-là.
+                  </li>
+                  <li>
+                    <strong>Lundi du Jeûne fédéral :</strong> attribué au parent qui était en charge le week-end directement précédent.
+                  </li>
+                </ul>
               </div>
-            </div>
 
-            <div className="rounded-xl border border-violet-200/80 bg-violet-50/40 p-4 dark:border-violet-900/50 dark:bg-violet-950/20">
-              <h3 className="font-semibold text-slate-900 dark:text-white">
-                4.3 Règle d&apos;alternance par blocs des fêtes majeures (Noël / Nouvel An / Pâques)
-              </h3>
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                Lorsqu&apos;elle est activée dans le générateur, cette règle découpe équitablement les fêtes pivots et alterne
-                automatiquement entre <strong>années paires</strong> et <strong>années impaires</strong> :
-              </p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border border-violet-200/60 bg-white/80 p-3 text-xs dark:border-violet-900/40 dark:bg-slate-900/60">
-                  <p className="font-semibold text-slate-900 dark:text-white">Bloc 1 — Noël</p>
-                  <p className="mt-1 text-slate-600 dark:text-slate-400">
-                    Du <strong>début des vacances scolaires vaudoises d&apos;hiver</strong> jusqu&apos;au point médian (incluant toujours
-                    les <strong>24 et 25 décembre</strong>).
-                  </p>
-                </div>
-                <div className="rounded-lg border border-violet-200/60 bg-white/80 p-3 text-xs dark:border-violet-900/40 dark:bg-slate-900/60">
-                  <p className="font-semibold text-slate-900 dark:text-white">Bloc 2 — Nouvel An</p>
-                  <p className="mt-1 text-slate-600 dark:text-slate-400">
-                    Du <strong>point médian jusqu&apos;à la fin des vacances d&apos;hiver</strong> (incluant toujours les{' '}
-                    <strong>31 décembre et 1er janvier</strong>).
-                  </p>
-                </div>
-                <div className="rounded-lg border border-violet-200/60 bg-white/80 p-3 text-xs dark:border-violet-900/40 dark:bg-slate-900/60">
-                  <p className="font-semibold text-slate-900 dark:text-white">Bloc de Pâques</p>
-                  <p className="mt-1 text-slate-600 dark:text-slate-400">
-                    Week-end prolongé de 4 jours du <strong>Vendredi saint au Lundi de Pâques inclus</strong>, calculé dynamiquement selon
-                    la date de Pâques de l&apos;année.
-                  </p>
-                </div>
+              <div className="rounded-xl border border-violet-200/80 bg-violet-50/40 p-4 dark:border-violet-900/50 dark:bg-violet-950/20">
+                <h3 className="font-semibold text-slate-900 dark:text-white">Phase 4 — Fêtes majeures (Pâques, Noël &amp; Nouvel An)</h3>
+                <ul className="mt-1.5 list-disc space-y-1.5 pl-4 text-xs text-slate-600 dark:text-slate-400">
+                  <li>
+                    <strong>Fériés et week-end de Pâques (Vendredi saint → Lundi de Pâques) :</strong> attribués au Parent 1 les{' '}
+                    <strong>années paires</strong> et au Parent 2 les <strong>années impaires</strong>. Si l&apos;alternance de la Phase 1
+                    attribue déjà le week-end de Pâques au bon parent, les semaines de vacances de Pâques ne sont pas modifiées (le Lundi de
+                    Pâques reste simplement rattaché au week-end). Sinon, les deux semaines des vacances scolaires de Pâques sont
+                    interverties pour que le parent désigné ait le week-end pascal + la 1re semaine, et l&apos;autre parent la 2e semaine.
+                  </li>
+                  <li>
+                    <strong>Noël &amp; Nouvel An :</strong> les vacances scolaires d&apos;hiver sont découpées en{' '}
+                    <strong>deux blocs égaux</strong> :
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                      <li>
+                        <strong>Années paires :</strong> Bloc 1 (incluant les <strong>24 et 25 décembre</strong>) au Parent 1 ; Bloc 2
+                        (incluant les <strong>31.12 et 01.01</strong>) au Parent 2.
+                      </li>
+                      <li>
+                        <strong>Années impaires :</strong> Bloc 1 (<strong>24 et 25 décembre</strong>) au Parent 2 ; Bloc 2 (
+                        <strong>31.12 et 01.01</strong>) au Parent 1.
+                      </li>
+                    </ul>
+                  </li>
+                </ul>
               </div>
-              <p className="mt-3 text-xs text-slate-600 dark:text-slate-400">
-                <strong>Alternance automatique par année :</strong> les <strong>années paires</strong>, le Bloc 1 (Noël) et Pâques sont
-                attribués au Parent A et le Bloc 2 (Nouvel An) au Parent B. Les <strong>années impaires</strong>, la répartition s&apos;
-                inverse automatiquement (Bloc 1 Noël et Pâques au Parent B, Bloc 2 Nouvel An au Parent A). Un sélecteur permet d&apos;
-                inverser le rôle Parent A / Parent B dans les réglages.
-              </p>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 text-xs dark:border-slate-800 dark:bg-slate-800/30">
               <p className="font-semibold text-slate-900 dark:text-white">
-                4.4 Que se passe-t-il si je modifie les paramètres du générateur plus tard ?
+                Préservation garantie des échanges validés et des demandes en cours
               </p>
               <p className="mt-1 text-slate-600 dark:text-slate-400">
-                Lorsque vous changez les paramètres dans <em>Foyer &amp; invitations</em> et cliquez sur{' '}
-                <strong>« Générer et enregistrer »</strong> :
+                Lors d&apos;une régénération du planning automatique dans <em>Foyer &amp; invitations</em> :
               </p>
               <ul className="mt-1.5 list-disc space-y-1 pl-4 text-slate-600 dark:text-slate-400">
-                <li>Les nouveaux jours et les jours purement automatiques sont créés ou recalculés selon vos nouveaux paramètres.</li>
                 <li>
-                  <strong>Les jours modifiés manuellement et validés (échanges approuvés) sont strictement préservés</strong> et ne sont
-                  jamais écrasés.
+                  <strong>Les modifications ponctuelles déjà validées d&apos;un commun accord ne sont jamais écrasées.</strong>
                 </li>
                 <li>
-                  <strong>Les demandes de modification en cours sont intégralement conservées.</strong>
+                  <strong>Les demandes de modification en cours (en attente d&apos;arbitrage) ne sont jamais perdues.</strong>
+                </li>
+                <li>
+                  Une fois le planning généré, chaque parent peut à tout moment proposer un échange ponctuel sur n&apos;importe quel jour via
+                  le calendrier.
                 </li>
               </ul>
             </div>
@@ -421,45 +442,50 @@ export function HelpPage() {
         <Card>
           <CardHeader
             title="5. Statistiques d'équité & Fêtes majeures"
-            description="Suivez en temps réel l'équilibre des jours de garde sur l'année civile sélectionnée."
+            description="Des compteurs basés sur le nombre réel de jours de l'année (365 ou 366 jours)."
           />
           <div className="space-y-3 p-5 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
             <p className="text-xs text-slate-600 dark:text-slate-400">
               En haut du tableau de bord (<Link to={base} className="font-medium text-brand-600 underline">Planning</Link>), le bandeau de
-              répartition calcule en temps réel (en tenant compte de tous les échanges validés) :
+              répartition affiche la moyenne des enfants de l&apos;Atome sur les <strong>vrais jours calendaires de l&apos;année</strong>{' '}
+              (sans additionner les enfants entre eux) :
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-xl border border-slate-200 p-3.5 text-xs dark:border-slate-800">
-                <p className="font-semibold text-slate-900 dark:text-white">4 compteurs annuels de répartition</p>
+                <p className="font-semibold text-slate-900 dark:text-white">4 compteurs annuels (moyenne des enfants)</p>
                 <ul className="mt-1.5 list-disc space-y-1 pl-4 text-slate-600 dark:text-slate-400">
                   <li>
-                    <strong>Jours totaux</strong> (ou <em>Jours-enfants totaux</em> si tous les enfants sont affichés).
+                    <strong>Jours totaux</strong> : calculés sur les <strong>365 jours</strong> de l&apos;année (366 les années
+                    bissextiles).
                   </li>
                   <li>
-                    <strong>Vacances scolaires</strong> (périodes officielles du Canton de Vaud).
+                    <strong>Vacances scolaires</strong> : calculées uniquement sur le nombre réel de jours de vacances scolaires vaudoises
+                    de l&apos;année.
                   </li>
                   <li>
-                    <strong>Jours fériés</strong> (les 9 fériés officiels vaudois).
+                    <strong>Jours fériés</strong> : calculés sur les <strong>9 jours fériés officiels</strong> vaudois de l&apos;année.
                   </li>
                   <li>
-                    <strong>Week-ends</strong> (samedis et dimanches de l&apos;année).
+                    <strong>Week-ends</strong> : calculés sur les <strong>104 à 106 samedis et dimanches</strong> de l&apos;année.
                   </li>
                 </ul>
               </div>
               <div className="rounded-xl border border-slate-200 p-3.5 text-xs dark:border-slate-800">
                 <p className="font-semibold text-slate-900 dark:text-white">Encart « Fêtes majeures (Année sélectionnée) »</p>
                 <p className="mt-1.5 text-slate-600 dark:text-slate-400">
-                  Affiche en un coup d&apos;œil quel foyer accueille les enfants sur les <strong>3 jalons clés</strong> de l&apos;année :
+                  Affiche quel foyer accueille les enfants sur les <strong>3 jalons pivots</strong> :
                 </p>
                 <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-slate-600 dark:text-slate-400">
                   <li>
-                    <strong>Pâques</strong> (basé sur le dimanche de Pâques)
+                    <strong>Pâques</strong> (dimanche de Pâques)
                   </li>
                   <li>
-                    <strong>Noël</strong> (basé sur le 25 décembre)
+                    <strong>Noël (24 et 25.12)</strong> : affiche le foyer en charge des deux jours, ou <strong>les deux foyers</strong> si
+                    le 24 est chez l&apos;un et le 25 chez l&apos;autre.
                   </li>
                   <li>
-                    <strong>Nouvel An</strong> (basé sur le 1er janvier)
+                    <strong>Nouvel An (31.12 et 01.01)</strong> : affiche le foyer en charge des deux jours, ou{' '}
+                    <strong>les deux foyers</strong> si le 31.12 et le 01.01 sont répartis entre les deux parents.
                   </li>
                 </ol>
               </div>

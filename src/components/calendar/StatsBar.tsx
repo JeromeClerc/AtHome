@@ -5,7 +5,6 @@ import { HOUSEHOLD_STYLES, ROLE_BADGE } from '@/config/theme'
 import { useAtome } from '@/hooks/useAtome'
 import { useStats } from '@/hooks/useStats'
 import { cn } from '@/utils/cn'
-import { formatFr } from '@/utils/dates'
 import { percent, type MajorHolidayMilestone, type SplitCount } from '@/utils/stats'
 
 function SplitStat({ label, count }: { label: string; count: SplitCount }) {
@@ -40,20 +39,22 @@ function MajorHolidayBadge({
   milestone: MajorHolidayMilestone
   householdLabels: { electron: string; positron: string }
 }) {
-  const { household } = milestone
+  const { households } = milestone
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200/80 bg-slate-50/70 px-2.5 py-1.5 text-xs dark:border-slate-800 dark:bg-slate-800/40">
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200/80 bg-slate-50/70 px-2.5 py-1.5 text-xs dark:border-slate-800 dark:bg-slate-800/40">
       <div className="flex items-baseline gap-1.5">
         <span className="font-medium text-slate-800 dark:text-slate-100">{milestone.label}</span>
-        <span className="text-[11px] text-slate-400">{formatFr(milestone.date, 'dd.MM')}</span>
+        <span className="text-[11px] text-slate-400">{milestone.dateLabel}</span>
       </div>
-      {household === 'electron' || household === 'positron' ? (
-        <Badge className={cn('inline-flex items-center gap-1', ROLE_BADGE[household])}>
-          <span className={cn('h-1.5 w-1.5 rounded-full', HOUSEHOLD_STYLES[household].dot)} />
-          {householdLabels[household]}
-        </Badge>
-      ) : household === 'mixed' ? (
-        <Badge className="bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-200">Partagé</Badge>
+      {households.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1">
+          {households.map((h) => (
+            <Badge key={h} className={cn('inline-flex items-center gap-1', ROLE_BADGE[h])}>
+              <span className={cn('h-1.5 w-1.5 rounded-full', HOUSEHOLD_STYLES[h].dot)} />
+              {householdLabels[h]}
+            </Badge>
+          ))}
+        </div>
       ) : (
         <Badge className="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">Non planifié</Badge>
       )}
@@ -68,8 +69,8 @@ export function StatsBar({ initialYear }: { initialYear: number }) {
   const [protonId, setProtonId] = useState<string | null>(null)
   const { stats, majorHolidays, loading } = useStats(`${year}-01-01`, `${year}-12-31`, protonId)
   const householdLabels = {
-    electron: atome.households.electron.label,
-    positron: atome.households.positron.label,
+    electron: atome.households.electron.label || HOUSEHOLD_STYLES.electron.label,
+    positron: atome.households.positron.label || HOUSEHOLD_STYLES.positron.label,
   }
 
   return (
@@ -87,10 +88,10 @@ export function StatsBar({ initialYear }: { initialYear: number }) {
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <span className={cn('inline-flex items-center gap-1', HOUSEHOLD_STYLES.electron.text)}>
-            <span className={cn('h-2 w-2 rounded-full', HOUSEHOLD_STYLES.electron.dot)} /> {atome.households.electron.label}
+            <span className={cn('h-2 w-2 rounded-full', HOUSEHOLD_STYLES.electron.dot)} /> {householdLabels.electron}
           </span>
           <span className={cn('inline-flex items-center gap-1', HOUSEHOLD_STYLES.positron.text)}>
-            <span className={cn('h-2 w-2 rounded-full', HOUSEHOLD_STYLES.positron.dot)} /> {atome.households.positron.label}
+            <span className={cn('h-2 w-2 rounded-full', HOUSEHOLD_STYLES.positron.dot)} /> {householdLabels.positron}
           </span>
           {protons.length > 1 && (
             <select
@@ -99,7 +100,7 @@ export function StatsBar({ initialYear }: { initialYear: number }) {
               onChange={(e) => setProtonId(e.target.value || null)}
               className="rounded-md border border-slate-300 bg-transparent px-2 py-1 dark:border-slate-700"
             >
-              <option value="">Tous les enfants</option>
+              <option value="">Tous les enfants (moyenne)</option>
               {protons.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.firstName}
@@ -110,7 +111,7 @@ export function StatsBar({ initialYear }: { initialYear: number }) {
         </div>
       </div>
       <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
-        <SplitStat label={protonId || protons.length <= 1 ? 'Jours totaux' : 'Jours-enfants totaux'} count={stats.all} />
+        <SplitStat label="Jours totaux" count={stats.all} />
         <SplitStat label="Vacances scolaires" count={stats.schoolHolidays} />
         <SplitStat label="Jours fériés" count={stats.publicHolidays} />
         <SplitStat label="Week-ends" count={stats.weekends} />

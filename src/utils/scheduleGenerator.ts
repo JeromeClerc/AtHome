@@ -1,6 +1,13 @@
-import { getEasterHolidayBlock, getVaudPublicHolidays, getWinterHolidayBlocks } from '@/config/vaudCalendar'
+import {
+  easterSunday,
+  federalFastMonday,
+  getEasterHolidayBlock,
+  getSchoolHolidaysForSchoolYear,
+  getVaudPublicHolidays,
+  getWinterHolidayBlocks,
+} from '@/config/vaudCalendar'
 import type { AlternancePattern, GeneratorOptions, Household, IsoDate, ScheduleMap } from '@/types'
-import { addIsoDays, eachIsoDate, fromIsoDate, isoWeekday } from './dates'
+import { addIsoDays, eachIsoDate, fromIsoDate, isoWeekday, toIsoDate } from './dates'
 
 export const other = (h: Household): Household => (h === 'electron' ? 'positron' : 'electron')
 
@@ -96,33 +103,142 @@ export function applyHolidayBridges(days: Map<IsoDate, Household>): IsoDate[] {
 }
 
 /**
+ * Phase 2 — Répartition des vacances scolaires supérieures à 2 semaines (vacances d'été).
+ *
+ * - Vacances de 1 jour à 1 semaine (Ascension, Relâches) : non modifiées (répartition de la Phase 1).
+ * - Vacances de 1 à 2 semaines (Automne) : non modifiées (l'alternance une semaine sur deux équilibre naturellement).
+ * - Vacances supérieures à 2 semaines (Été, ~7 semaines) : sans modifier le nombre total de jours
+ *   de chaque parent issu de la Phase 1 sur l'été, regroupe les semaines en 2 grands blocs contigus
+ *   pour éviter les déplacements et passages de relais intempestifs hors période scolaire.
+ */
+export function applySummerHolidayBlocks(days: Map<IsoDate, Household>): IsoDate[] {
+  if (days.size === 0) return []
+  const dates = [...days.keys()].sort()
+  const first = dates[0] as IsoDate
+  const last = dates[dates.length - 1] as IsoDate
+  const startYear = fromIsoDate(first).getFullYear()
+  const endYear = fromIsoDate(last).getFullYear()
+
+  const changed = new Set<IsoDate>()
+  for (let y = startYear - 1; y <= endYear; y += 1) {
+    const periods = getSchoolHolidaysForSchoolYear(y)
+    for (const p of periods) {
+      const periodDates = eachIsoDate(p.start, p.end)
+      // Seules les périodes > 2 semaines (vacances d'été, > 17 jours) sont regroupées en blocs.
+      if (p.kind !== 'ete' && periodDates.length <= 17) continue
+      const available = periodDates.filter((d) => days.has(d))
+      if (available.length <= 17) continue
+
+      // Le premier bloc prolonge le parent en charge au début des vacances d'été (fin de la dernière semaine d'école).
+      const firstBlockParent = days.get(available[0] as IsoDate)
+      if (!firstBlockParent) continue
+      const secondBlockParent = other(firstBlockParent)
+      const firstParentTotalDays = available.filter((d) => days.get(d) === firstBlockParent).length
+
+      available.forEach((d, idx) => {
+        const target = idx < firstParentTotalDays ? firstBlockParent : secondBlockParent
+        if (days.get(d) !== target) {
+          days.set(d, target)
+          changed.add(d)
+        }
+      })
+    }
+  }
+  return [...changed].sort()
+}
+
+/**
+ * Phase 3 — Règles spécifiques des jours fériés vaudois :
+ * - Jeudi de l'Ascension + pont du vendredi : attribués au parent en charge cette semaine-là.
+ * - Lundi de Pentecôte : attribué au parent qui était en charge le week-end directement précédent.
+ * - 1er août (Fête nationale) : attribué au parent en charge cette semaine-là.
+ * - Lundi du Jeûne fédéral : attribué au parent qui était en charge le week-end directement précédent.
+ */
+export function applyPublicHolidayRules(days: Map<IsoDate, Household>): IsoDate[] {
+  if (days.size === 0) return []
+  const dates = [...days.keys()].sort()
+  const first = dates[0] as IsoDate
+  const last = dates[dates.length - 1] as IsoDate
+  const startYear = fromIsoDate(first).getFullYear()
+  const endYear = fromIsoDate(last).getFullYear()
+
+  const changed = new Set<IsoDate>()
+  const setDay = (date: IsoDate, owner: Household | undefined) => {
+    if (!owner || !days.has(date)) return
+    if (days.get(date) !== owner) {
+      days.set(date, owner)
+      changed.add(date)
+    }
+  }
+
+  for (let y = startYear; y <= endYear; y += 1) {
+    const easterIso = toIsoDate(easterSunday(y))
+
+    // 1. Jeudi de l'Ascension + pont du vendredi : parent en charge cette semaine-là (lundi de la semaine).
+    const ascensionThursday = addIsoDays(easterIso, 39)
+    const ascensionFriday = addIsoDays(easterIso, 40)
+    const ascensionWeekMonday = addIsoDays(ascensionThursday, -3)
+    const ascensionOwner = days.get(ascensionWeekMonday) ?? days.get(ascensionThursday)
+    setDay(ascensionThursday, ascensionOwner)
+    setDay(ascensionFriday, ascensionOwner)
+
+    // 2. Lundi de Pentecôte : parent en charge le week-end directement précédent (dimanche).
+    const pentecostMonday = addIsoDays(easterIso, 50)
+    const pentecostWeekendOwner = days.get(addIsoDays(pentecostMonday, -1))
+    setDay(pentecostMonday, pentecostWeekendOwner)
+
+    // 3. 1er août : parent en charge cette semaine-là.
+    const august1 = `${y}-08-01`
+    const august1Weekday = isoWeekday(august1)
+    const august1WeekMonday = addIsoDays(august1, -(august1Weekday - 1))
+    const august1Owner = days.get(august1WeekMonday) ?? days.get(august1)
+    setDay(august1, august1Owner)
+
+    // 4. Lundi du Jeûne fédéral : parent en charge le week-end directement précédent (dimanche).
+    const jeuneFederalMonday = toIsoDate(federalFastMonday(y))
+    const jeuneFederalWeekendOwner = days.get(addIsoDays(jeuneFederalMonday, -1))
+    setDay(jeuneFederalMonday, jeuneFederalWeekendOwner)
+  }
+
+  // Applique également la règle générale des ponts fériés adjacents à un week-end.
+  for (const d of applyHolidayBridges(days)) changed.add(d)
+
+  return [...changed].sort()
+}
+
+/**
  * Détermine quel foyer accueille les enfants sur chacun des blocs de fêtes (Noël, Nouvel An, Pâques)
  * pour une année donnée :
- * - Années paires : Bloc 1 (Noël) et Pâques → Parent A (`evenYearHousehold`), Bloc 2 (Nouvel An) → Parent B.
- * - Années impaires : inversion automatique (Bloc 1 Noël et Pâques → Parent B, Bloc 2 Nouvel An → Parent A).
+ * - Années paires : Bloc 1 (Noël : 24 et 25.12) et Pâques → Parent 1 (`evenYearHousehold`),
+ *   Bloc 2 (Nouvel An : 31.12 et 01.01) → Parent 2.
+ * - Années impaires : inversion automatique (Bloc 1 Noël et Pâques → Parent 2, Bloc 2 Nouvel An → Parent 1).
  */
 export function getHolidayBlockHouseholds(
   year: number,
   evenYearHousehold: Household = 'electron',
 ): { christmas: Household; newYear: Household; easter: Household } {
-  const parentA = evenYearHousehold
-  const parentB = other(evenYearHousehold)
+  const parent1 = evenYearHousehold
+  const parent2 = other(evenYearHousehold)
   const isEvenYear = year % 2 === 0
   return {
-    christmas: isEvenYear ? parentA : parentB,
-    newYear: isEvenYear ? parentB : parentA,
-    easter: isEvenYear ? parentA : parentB,
+    christmas: isEvenYear ? parent1 : parent2,
+    newYear: isEvenYear ? parent2 : parent1,
+    easter: isEvenYear ? parent1 : parent2,
   }
 }
 
 /**
- * Applique la règle d'alternance par blocs pour les fêtes de fin d'année (Noël / Nouvel An découpés
- * en 2 blocs sur les vacances scolaires vaudoises d'hiver) et le bloc de Pâques (Vendredi saint → Lundi de Pâques),
- * avec alternance automatique années paires / années impaires.
- *
- * @param days Planning (date → foyer) d'un enfant, modifié en place.
- * @param evenYearHousehold Foyer « Parent A » (Noël & Pâques les années paires ; Nouvel An les années impaires).
- * @returns Les dates réattribuées.
+ * Phase 4 — Fêtes majeures (Pâques, Noël & Nouvel An) :
+ * - Fériés et week-end de Pâques :
+ *   - Si l'alternance de la Phase 1 attribue déjà le week-end de Pâques au bon parent (Parent 1 les années paires,
+ *     Parent 2 les années impaires), on conserve les semaines telles quelles (en rattachant le Vendredi saint et
+ *     le Lundi de Pâques au week-end de Pâques).
+ *   - Sinon, on intervertit les deux semaines des vacances scolaires de Pâques afin que le parent attendu ait
+ *     le week-end et les fériés de Pâques + la 1re semaine, et l'autre parent la 2e semaine.
+ * - Noël & Nouvel An :
+ *   - Découpe les vacances scolaires d'hiver en 2 blocs égaux :
+ *     Bloc 1 (incluant 24 et 25.12) au Parent 1 les années paires (Parent 2 les années impaires) ;
+ *     Bloc 2 (incluant 31.12 et 01.01) au Parent 2 les années paires (Parent 1 les années impaires).
  */
 export function applyHolidayBlocks(days: Map<IsoDate, Household>, evenYearHousehold: Household = 'electron'): IsoDate[] {
   if (days.size === 0) return []
@@ -145,8 +261,24 @@ export function applyHolidayBlocks(days: Map<IsoDate, Household>, evenYearHouseh
   for (let y = startYear - 1; y <= endYear; y += 1) {
     const owners = getHolidayBlockHouseholds(y, evenYearHousehold)
     const easterBlock = getEasterHolidayBlock(y)
+    const currentEasterOwner = days.get(easterBlock.easterDate)
+
+    if (currentEasterOwner && currentEasterOwner !== owners.easter) {
+      // Intervertit les semaines des vacances scolaires de Pâques si l'alternance de base ne correspond pas.
+      const paquesPeriod = getSchoolHolidaysForSchoolYear(y - 1).find((p) => p.kind === 'paques')
+      if (paquesPeriod) {
+        const firstWeekEnd = addIsoDays(easterBlock.easterDate, 7)
+        const week1Dates = eachIsoDate(paquesPeriod.start, firstWeekEnd <= paquesPeriod.end ? firstWeekEnd : paquesPeriod.end)
+        const week2Start = addIsoDays(firstWeekEnd, 1)
+        const week2Dates = week2Start <= paquesPeriod.end ? eachIsoDate(week2Start, paquesPeriod.end) : []
+        assignBlock(week1Dates, owners.easter)
+        assignBlock(week2Dates, other(owners.easter))
+      }
+    }
+    // Garantit dans tous les cas que le bloc Vendredi saint → Lundi de Pâques appartient au parent désigné.
     assignBlock(easterBlock.dates, owners.easter)
 
+    // Noël (Bloc 1 : 24-25.12) & Nouvel An (Bloc 2 : 31.12-01.01) en 2 blocs égaux sur les vacances d'hiver.
     const winterBlocks = getWinterHolidayBlocks(y)
     assignBlock(winterBlocks.christmasBlock.dates, owners.christmas)
     assignBlock(winterBlocks.newYearBlock.dates, owners.newYear)
@@ -156,12 +288,11 @@ export function applyHolidayBlocks(days: Map<IsoDate, Household>, evenYearHouseh
 }
 
 /**
- * Génère automatiquement un planning d'alternance pour une période et une liste d'enfants.
- *
- * Le cycle démarre au `startDate` avec `firstHousehold`. La règle des ponts fériés est appliquée
- * par défaut, suivie optionnellement par la règle des blocs de fêtes (Noël / Nouvel An / Pâques).
- * Pour calculer le parent du week-end adjacent à un férié en bord de période, le cycle
- * est étendu d'un jour de chaque côté (sans être retourné).
+ * Génère automatiquement un planning d'alternance en 4 phases :
+ * - Phase 1 : Répartition de base (alternance à partir de `startDate` avec `firstHousehold`).
+ * - Phase 2 : Répartition des vacances scolaires (regroupement des vacances d'été > 2 semaines en 2 grands blocs sans modifier le total de jours de la Phase 1).
+ * - Phase 3 : Jours fériés (Ascension + pont, Lundi de Pentecôte, 1er août, Lundi du Jeûne fédéral et ponts fériés).
+ * - Phase 4 : Fêtes majeures (Pâques avec interversion des semaines si nécessaire, et Noël / Nouvel An en 2 blocs égaux années paires / impaires).
  *
  * @returns Planning `date → (protonId → foyer)`.
  */
@@ -173,12 +304,29 @@ export function generateSchedule(options: GeneratorOptions): ScheduleMap {
   const cycle = buildCycle(pattern, firstHousehold, customCycle)
   const at = (offset: number): Household => cycle[((offset % cycle.length) + cycle.length) % cycle.length] as Household
 
-  const extendedStart = addIsoDays(startDate, -1)
-  const extendedEnd = addIsoDays(endDate, 1)
+  // Fenêtre étendue de 60 jours de chaque côté pour que les périodes de vacances en bord de plage soient complètes.
+  const CONTEXT_PADDING_DAYS = 60
+  const extendedStart = addIsoDays(startDate, -CONTEXT_PADDING_DAYS)
+  const extendedEnd = addIsoDays(endDate, CONTEXT_PADDING_DAYS)
   const perChild = new Map<IsoDate, Household>()
-  eachIsoDate(extendedStart, extendedEnd).forEach((d, i) => perChild.set(d, at(i - 1)))
-  if (options.applyHolidayBridges !== false) applyHolidayBridges(perChild)
-  if (options.applyHolidayBlocks) applyHolidayBlocks(perChild, options.evenYearHolidayHousehold ?? 'electron')
+
+  // Phase 1 — Répartition de base
+  eachIsoDate(extendedStart, extendedEnd).forEach((d, i) => perChild.set(d, at(i - CONTEXT_PADDING_DAYS)))
+
+  // Phase 2 — Répartition des vacances scolaires (> 2 semaines : vacances d'été en grands blocs)
+  if (options.applyHolidayBlocks) {
+    applySummerHolidayBlocks(perChild)
+  }
+
+  // Phase 3 — Jours fériés (Ascension + pont, Lundi de Pentecôte, 1er août, Lundi du Jeûne fédéral)
+  if (options.applyHolidayBridges !== false) {
+    applyPublicHolidayRules(perChild)
+  }
+
+  // Phase 4 — Fêtes majeures (Pâques, Noël & Nouvel An)
+  if (options.applyHolidayBlocks) {
+    applyHolidayBlocks(perChild, options.evenYearHolidayHousehold ?? 'electron')
+  }
 
   const result: ScheduleMap = {}
   for (const d of eachIsoDate(startDate, endDate)) {

@@ -72,16 +72,21 @@ Les dates « jour » sont **toujours** des chaînes ISO `yyyy-MM-dd` (pas de fus
    `awaitingHousehold` = foyer qui doit agir ; seul celui-ci peut approuver/contre-proposer/rejeter.
 3. **Jours fériés vaudois** (`src/config/vaudCalendar.ts`) : 1er janv., 2 janv., Vendredi saint, Lundi de Pâques,
    Ascension, Lundi de Pentecôte, 1er août, Lundi du Jeûne fédéral, Noël. Calculés (algorithme de Pâques).
-4. **Règle des ponts** (`src/utils/scheduleGenerator.ts`) : un bloc de jours fériés qui touche un week-end
-   (finit un vendredi / commence un lundi) est attribué au parent qui a le week-end adjacent.
-5. **Règle des fêtes par blocs & statistiques des fêtes majeures** (`getWinterHolidayBlocks`, `getEasterHolidayBlock`,
-   `applyHolidayBlocks`, `computeMajorHolidays`) :
-   - Découpage des vacances scolaires vaudoises de fin d'année en 2 blocs : Bloc 1 (Noël, incluant 24 et 25 déc.)
-     et Bloc 2 (Nouvel An, incluant 31 déc. et 1er janv.), + bloc de Pâques (Vendredi saint → Lundi de Pâques).
-   - Alternance automatique années paires (Bloc 1 Noël & Pâques → Parent A, Bloc 2 Nouvel An → Parent B) /
-     années impaires (inversion automatique), avec option d'inversion A/B dans le générateur.
-   - Bandeau **« Fêtes majeures »** sur le Dashboard (`StatsBar.tsx`) limité aux 3 jalons : Pâques (dimanche de Pâques),
-     Noël (25 décembre) et Nouvel An (1er janvier) selon le planning actif.
+4. **Méthode de génération en 4 phases** (`src/utils/scheduleGenerator.ts`) :
+   - **Phase 1 (Base)** : alternance à partir de `startDate` (1re semaine de garde).
+   - **Phase 2 (Vacances scolaires)** : vacances ≤ 2 semaines inchangées ; vacances > 2 semaines (Été, ~7 sem.) regroupées en
+     2 grands blocs contigus sans modifier le nombre total de jours d'été de la Phase 1.
+   - **Phase 3 (Jours fériés)** : Jeudi de l'Ascension + pont du vendredi et 1er août attribués au parent de la semaine ;
+     Lundi de Pentecôte et Lundi du Jeûne fédéral attribués au parent du week-end directement précédent.
+   - **Phase 4 (Fêtes majeures)** :
+     - *Pâques* : intervertit les 2 semaines des vacances de Pâques uniquement si la Phase 1 n'attribue pas le week-end pascal au bon parent
+       (Parent 1 années paires, Parent 2 années impaires).
+     - *Noël & Nouvel An* : découpe les vacances scolaires d'hiver en 2 blocs égaux — Bloc 1 (incluant 24 et 25.12) au Parent 1 les années
+       paires (Parent 2 les années impaires), Bloc 2 (incluant 31.12 et 01.01) au Parent 2 les années paires (Parent 1 les années impaires).
+5. **Statistiques d'équité & Fêtes majeures** (`src/utils/stats.ts`, `StatsBar.tsx`) :
+   - Compteurs annuels exprimés en **vrais jours calendaires** (sur 365/366 j, 9 fériés, etc.) via la moyenne des enfants de l'Atome.
+   - Bandeau **« Fêtes majeures »** sur les 3 jalons : Pâques (dimanche de Pâques), Noël (24 et 25.12 — affiche les deux foyers si partagé),
+     et Nouvel An (31.12 et 01.01 — affiche les deux foyers si partagé).
 6. **Vacances scolaires vaudoises** : table officielle par année scolaire + heuristique de repli pour les
    années non saisies (à mettre à jour chaque année depuis vd.ch).
 7. **Majorité** (`src/utils/age.ts`) : dès 18 ans révolus, la fiche d'un proton est en lecture seule pour les

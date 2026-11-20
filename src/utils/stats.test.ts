@@ -20,8 +20,11 @@ describe('computeStats', () => {
     expect(s.schoolHolidays.total).toBeGreaterThan(60)
   })
 
-  it("compte les jours-enfants si aucun enfant n'est filtré", () => {
-    expect(computeStats(schedule, '2026-01-01', '2026-12-31').all.total).toBe(714)
+  it("calcule la moyenne des enfants sur le vrai nombre de jours de l'année (sans additionner les enfants)", () => {
+    const s = computeStats(schedule, '2026-01-01', '2026-12-31')
+    expect(s.all.total).toBe(357)
+    expect(s.all.electron + s.all.positron).toBe(357)
+    expect(s.publicHolidays.total).toBe(7)
   })
 
   it('percent', () => {
@@ -29,10 +32,10 @@ describe('computeStats', () => {
     expect(percent(0, 0)).toBe(0)
   })
 
-  it('calcule les 3 fêtes majeures (Pâques, Noël, Nouvel An) selon le planning actif', () => {
+  it('calcule les 3 fêtes majeures (Pâques, Noël 24-25.12, Nouvel An 31.12-01.01) et affiche les deux foyers si partagé', () => {
     const withBlocks = generateSchedule({
       startDate: '2025-12-20',
-      endDate: '2026-12-31',
+      endDate: '2027-01-05',
       pattern: 'weekly',
       firstHousehold: 'electron',
       protonIds: ['a', 'b'],
@@ -40,15 +43,15 @@ describe('computeStats', () => {
       evenYearHolidayHousehold: 'electron',
     })
     const milestones = computeMajorHolidays(withBlocks, 2026)
-    expect(milestones).toEqual([
-      { key: 'paques', label: 'Pâques', date: '2026-04-05', household: 'electron' },
-      { key: 'noel', label: 'Noël', date: '2026-12-25', household: 'electron' },
-      { key: 'nouvel_an', label: 'Nouvel An', date: '2026-01-01', household: 'electron' },
-    ])
+    expect(milestones.find((m) => m.key === 'paques')?.households).toEqual(['electron'])
+    expect(milestones.find((m) => m.key === 'noel')?.households).toEqual(['electron'])
+    expect(milestones.find((m) => m.key === 'nouvel_an')?.households).toEqual(['positron'])
 
-    // Simulation d'un échange validé sur Noël pour l'enfant 'a' uniquement
-    withBlocks['2026-12-25'] = { a: 'positron', b: 'electron' }
-    expect(computeMajorHolidays(withBlocks, 2026).find((m) => m.key === 'noel')?.household).toBe('mixed')
-    expect(computeMajorHolidays(withBlocks, 2026, 'a').find((m) => m.key === 'noel')?.household).toBe('positron')
+    // Si le 24.12 est attribué à Positron et le 25.12 à Électron, affiche les deux foyers
+    withBlocks['2026-12-24'] = { a: 'positron', b: 'positron' }
+    withBlocks['2026-12-25'] = { a: 'electron', b: 'electron' }
+    const splitNoel = computeMajorHolidays(withBlocks, 2026).find((m) => m.key === 'noel')
+    expect(splitNoel?.household).toBe('mixed')
+    expect(splitNoel?.households).toEqual(['electron', 'positron'])
   })
 })
